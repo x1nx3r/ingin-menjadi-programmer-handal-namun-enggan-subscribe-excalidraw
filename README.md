@@ -8,19 +8,13 @@
   <strong>Live: <a href="https://canvas.x1nx3r.dev" target="_blank">canvas.x1nx3r.dev</a></strong>
 </p>
 
-An Excalidraw wrapper. Because I wanted to draw diagrams without signing up
-for a SaaS product that emails me every Tuesday about "premium canvas
-textures." You know the ones. "Unlock the felt-tip pen for $9/mo." I just
-want to draw a box with an arrow in it. I don't need a subscription for that.
+Draw boxes. Connect them. Call it architecture.
 
-This is **IMPHISE** — a Go + Templ + HTMX + Tailwind app that wraps
-Excalidraw, saves drawings to SQLite, and lets you share them with a link.
-No latency. No login wall (well, a Google login wall, but you already have
-a Google account). No "upgrade to pro to export as PNG."
+An Excalidraw wrapper that actually works. No SaaS emails, no subscription
+to unlock the felt-tip pen, no "upgrade to pro to export as PNG." Just draw.
 
-It compiles to a single binary (~59MB, mostly the 8MB Excalidraw bundle).
-The database is a single `canvas.db` file. I deployed it on a $5 VPS and it
-uses 16MB of RAM. That's less than most people's browser tabs.
+**IMPHISE** is a Go + Templ + HTMX + Tailwind v4 app that wraps Excalidraw,
+saves to SQLite, shares via links, and runs as a single binary on a $5 VPS.
 
 ## Stack
 
@@ -28,7 +22,7 @@ uses 16MB of RAM. That's less than most people's browser tabs.
 |---|---|---|
 | Language | Go | Compiles to a binary. No runtime. No `node_modules`. |
 | Templates | Templ | Type-safe HTML that doesn't make you want to cry. |
-| CSS | Tailwind v4 (standalone) | Utility classes without 400MB of PostCSS plugins. |
+| CSS | Tailwind v4 (standalone) | Utility classes. Custom CSS generation for responsive variants. |
 | Interactivity | HTMX | Server-rendered HTML fragments. No virtual DOM. |
 | Auth | Firebase Auth Web SDK | Google sign-in. ID tokens. Server-verified session cookies. |
 | Database | SQLite (`mattn/go-sqlite3`) | Single file. WAL mode. Zero config. CGO required. |
@@ -71,6 +65,10 @@ might need `gcc` installed (it's usually there already). On the server,
 
 That's it. No JWT parsing on the client. No `localStorage` tokens. No
 "refresh token rotation" blog post you'll read at 2AM and immediately forget.
+
+Login redirects to `/drawings`, logout redirects to `/`. Both handled via
+HTMX `HX-Redirect` headers — the form `POST` triggers a full page navigation
+without any JavaScript on the client side.
 
 ### Canvas Save/Load
 
@@ -154,9 +152,42 @@ Excalidraw bundle) to generate a PNG thumbnail. If the blob is under
 dashboard shows these thumbnails in a grid. If there's no thumbnail, you
 get a placeholder with the drawing title.
 
-The 100KB limit is arbitrary. I picked it because it felt right. If your
-drawing produces a thumbnail larger than 100KB, congratulations, you've
-made something detailed enough that a 100KB thumbnail doesn't do it justice.
+### CSS Generation (Tailwind v4 Responsive Classes)
+
+Tailwind v4's `@source` directive doesn't scan `.templ` files by default.
+This means responsive variants like `sm:hidden`, `md:flex`, `lg:grid-cols-3`
+silently disappear from the output. No warnings. No errors. Just broken
+responsive layouts on mobile. For hours.
+
+The fix: a custom Go tool (`tools/generate_css/main.go`) that:
+
+1. Scans all `.templ` files in `app/`
+2. Extracts CSS classes matching responsive patterns (`sm:`, `md:`, `lg:`, `xl:`, `dark:`)
+3. Generates `app/_entry.css` with `@source inline("...")` declarations
+4. Appends the contents of `globals.css`
+
+This gets fed to `npx @tailwindcss/cli` which now sees all responsive
+classes. The `make css` target runs this pipeline.
+
+```bash
+make css   # generate-css → tailwind → globals.css.output
+```
+
+The `globals.css.output` is embedded into the Go binary via `//go:embed`
+and served with cache-busting ETags (SHA256 hash).
+
+### CSS Cache Busting
+
+The embedded CSS is served with:
+- `Cache-Control: no-cache, must-revalidate`
+- `ETag: "<sha256-hash>"` computed at init time
+
+Cloudflare aggressively caches static assets. The `no-cache` directive
+was being ignored by Cloudflare's CDN layer, causing stale CSS to be
+served. The ETag at least lets browsers revalidate properly.
+
+If you deploy and the spacing looks wrong, purge Cloudflare's cache.
+This is not a bug. This is Cloudflare being Cloudflare.
 
 ### Excalidraw Theming
 
@@ -169,7 +200,17 @@ to everything that stands still long enough.
 
 The theme toggle syncs with Excalidraw's internal state. When you flip
 from Latte to Mocha, the canvas follows without needing a page reload.
-This took longer than I'd like to admit.
+
+The canvas background uses Catppuccin's `--ctp-base` color instead of
+white, so the canvas feels like part of the app rather than a foreign
+iframe.
+
+### PWA Manifest
+
+A `manifest.json` is embedded and served with the correct `Content-Type`.
+Layout templates include the `<meta>` tags for theme-color and
+apple-mobile-web-app-capable. No service worker yet — that's a problem
+for future me.
 
 ## Project Structure
 
@@ -177,35 +218,37 @@ This took longer than I'd like to admit.
 main.go                          # Routes, middleware, static serving
 app/
   lib/                           # Shared infrastructure
-    auth.go                      # Firebase Admin SDK init (auto-detects service account)
-    middleware.go                # Session cookie verification, RequireAuth, GetUserUID
-    auth_handlers.go             # Login/logout/user endpoints (unified nav button styling)
+    auth.go                      # Firebase Admin SDK init
+    middleware.go                # Session cookie verification, RequireAuth
+    auth_handlers.go             # Login/logout/user + navBtnClass
     db.go                        # SQLite init, WAL mode, schema migration
   api/                           # API handlers (no HTML rendering)
-    draw.go                      # Data, Save, Share, Rename, Thumbnail, Delete handlers
+    draw.go                      # Data, Save, Share, Rename, Thumbnail, Delete
     shared.go                    # Public shared data handler (no auth)
   canvas/                        # Canvas pages (Excalidraw editor)
-    page.go + .templ             # Canvas editor with merged title bar
-    shared.go + .templ           # Read-only shared view
+    page.templ                   # Canvas editor with responsive title bar
+    shared.templ                 # Read-only shared view
   dashboard/
-    page.go + .templ             # Drawing list + new drawing (content-only, uses Layout)
+    page.templ                   # Drawing list + new drawing
   profile/
-    page.go + .templ             # User profile with drawing grid (content-only, uses Layout)
+    page.templ                   # User profile with drawing grid
   components/
-    navigation.templ             # Nav bar with logo, links, theme toggle (autoHide param)
+    navigation.templ             # Hamburger menu (mobile) + desktop nav
+    logo.templ                   # Icon-only on mobile, text on desktop
     drawing_card.templ           # Card with thumbnail, rename, delete
-    logo.templ                   # SVG logo component
-    footer.templ                 # Footer
+    footer.templ                 # GOTTH badge + IMPHISE copyright
     empty_state.templ            # Empty state for dashboard
-  layout.templ                   # Root HTML shell (HTML, head, nav, footer, Firebase SDK)
-  canvas_layout.templ            # Minimal HTML shell for Excalidraw pages
+  layout.templ                   # Root HTML shell (Bungee + Space Mono, Firebase, PWA)
+  canvas_layout.templ            # Minimal shell for Excalidraw pages
   page.templ                     # Landing page (hero, features, CTA)
-  page.go                        # Landing handler (redirects authenticated to /drawings)
-  globals.css                    # Design tokens, Tailwind config, base styles
+  globals.css                    # Catppuccin tokens, Tailwind, Bungee + Space Mono
   assets/
     excalidraw/                  # Excalidraw source (entry.js, package.json)
-    public/                      # Static files (logo, excalidraw bundle/css)
-    assets.go                    # go:embed directives
+    public/                      # Static files (logo, bundle, brutalist CSS, manifest)
+    assets.go                    # go:embed directives + CSSHash
+  _entry.css                     # Generated: @source inline() + globals.css
+tools/
+  generate_css/main.go           # Scan templ → extract responsive classes → _entry.css
 ```
 
 ### Layout Unification
@@ -213,31 +256,37 @@ app/
 All pages use one of two layout templates:
 
 - **`Layout`** — Full HTML shell with nav, footer, Firebase SDK, HTMX. Used
-  by landing, dashboard, and profile pages. Page templates are content-only
-  components wrapped in `@Layout(...)`.
+  by landing, dashboard, and profile pages.
 
-- **`CanvasLayout`** — Minimal HTML shell with just the head (Excalidraw CSS,
-  theme init). Used by canvas and shared pages which need full-screen layouts
-  without nav/footer.
+- **`CanvasLayout`** — Minimal HTML shell for Excalidraw pages (just the head
+  with fonts, theme init, PWA meta tags).
 
-This means 2 layout templates cover 5 pages, instead of 5 standalone HTML
-shells with duplicated `<head>` blocks.
+### Responsive Design
+
+Every page adapts to mobile:
+
+- **Navigation**: Hamburger menu on mobile (`md:hidden`/`md:flex`), full nav on desktop
+- **Logo**: Icon-only on mobile, text on `sm:` and up
+- **Auth bar**: Returns both `#auth-bar` (desktop) and `#auth-bar-mobile` (mobile)
+  via `hx-swap-oob="true"` — mobile gets stacked layout with full-width buttons
+- **Landing page**: Single column on mobile, multi-column on `sm:`/`lg:`
+- **Dashboard**: Stacked cards on mobile, grid on `sm:grid-cols-2`
+- **Canvas title bar**: Logo hidden on mobile, input shrinks, links collapse
+- **Decorative elements**: Hidden on mobile, visible on `md:` and up
 
 ### Auth Bar
 
-The nav auth bar (`#auth-bar`) is loaded via HTMX on every page. The server
-returns a consistent `<div class="flex items-center gap-2">` with buttons
-that all share the same brutalist class set:
+The nav auth bar is loaded via HTMX on every page. The server returns
+consistent HTML with a shared brutalist button class defined once in
+`auth_handlers.go` as `navBtnClass`:
 
 ```
-px-3 py-1.5 border-2 border-[var(--border)] text-xs font-bold uppercase
-tracking-wider cursor-pointer hover:bg-[var(--bg-subtle)] transition-all
+px-3 py-1.5 border-2 border-[var(--accent)] bg-[var(--accent)]
+text-[var(--accent-fg)] text-xs font-bold uppercase tracking-wider
+cursor-pointer hover:bg-[var(--mauve)] transition-all
 active:translate-x-0.5 active:translate-y-0.5 active:shadow-none
-shadow-[2px_2px_0px_0px_var(--border)]
+shadow-[2px_2px_0px_0px_var(--accent)]
 ```
-
-This is defined once in `auth_handlers.go` as `navBtnClass` and used
-across all auth states (Sign In, Logout, logged-in profile bar).
 
 ## Deployment
 
@@ -249,15 +298,14 @@ The app deploys as a single binary to a bare-metal VPS via atomic symlink swap.
 bash deploy.sh
 ```
 
-1. **Local build:** `make css && make templ && CGO_ENABLED=1 go build` → single binary
+1. **Local build:** `make css && make templ && CGO_ENABLED=1 go build`
 2. **rsync:** Binary + Firebase JSON + Makefile.server → timestamped release dir
 3. **Atomic swap:** `ln -nfs` points `current` → new release
 4. **Symlink DB:** SQLite files in `shared/` are symlinked into the new release
 5. **Restart:** `systemd restart udin-canvas`
-6. **Clean up:** Old releases are compressed to `.tar.xz` archives (keep 5)
+6. **Clean up:** Old releases compressed to `.tar.xz` (keep last 5)
 
-Zero downtime. The binary is 59MB, the DB is a single file, and the whole
-deploy takes about 30 seconds including the compression of old releases.
+Zero downtime. Binary is ~61MB, DB is a single file, deploy takes ~50s.
 
 ### Server Setup
 
@@ -265,6 +313,7 @@ deploy takes about 30 seconds including the compression of old releases.
 - **Service:** systemd unit with memory limit
 - **Database:** shared SQLite file (persists across deploys via symlinks)
 - **Peak memory:** ~16MB
+- **CDN:** Cloudflare (aggressive caching, purge when CSS changes)
 
 ### Environment Variables
 
@@ -274,9 +323,84 @@ deploy takes about 30 seconds including the compression of old releases.
 | `SQLITE_DB_PATH` | No | `./canvas.db` | Path to SQLite database file |
 
 The Firebase service account JSON is auto-detected by scanning for
-`-firebase-adminsdk-*.json` in the working directory. If you have exactly
-one such file, it gets picked up. If you have zero or more than one, the
-app yells at you.
+`-firebase-adminsdk-*.json` in the working directory.
+
+## The Suffering Log
+
+Things that went wrong during development, in roughly chronological order:
+
+1. **Firestore → SQLite migration** — Moved from a managed service to a
+   single file. Had to rewrite every query handler. Worth it.
+
+2. **Login/logout routing** — The login handler set `HX-Redirect: /drawings`
+   but the logout handler used `HX-Redirect: /`. Both work. Neither was
+   obvious. The logout form also had `hx-boost="false"` which was silently
+   swallowing the `HX-Redirect` header. Removed it. Fixed.
+
+3. **Excalidraw canvas text font** — Set `body { font-family: 'Space Mono' }`
+   in globals.css. This leaked into Excalidraw's canvas text input. Added
+   a CSS reset in `excalidraw-brutalist.css` targeting `.excalidraw .text-editor`.
+   Still persists. Accepted as a minor issue.
+
+4. **Double branding** — Logo component was rendering in both the navigation
+   AND the landing page hero section. Removed it from the landing page.
+   Logo now only appears in nav and canvas pages.
+
+5. **Tailwind v4 responsive classes silently disappearing** — `sm:hidden`,
+   `md:flex`, `lg:grid-cols-3` were all missing from the CSS output. No
+   warnings. No errors. Just broken layouts. Spent hours debugging before
+   discovering that Tailwind v4's `@source` doesn't scan `.templ` files.
+   Built a Go tool to fix it.
+
+6. **`@source inline()` not working** — Thought `@source inline("sm:hidden md:flex")`
+   would tell Tailwind to generate those classes. It doesn't. The classes
+   must appear in the source files Tailwind scans. The fix: include the
+   actual `.templ` content via `@source inline()` with the full class list,
+   or concatenate the templ file contents as CSS comments.
+
+7. **Cloudflare caching stale CSS** — Deployed new CSS, still serving old
+   version. The `Cache-Control: no-cache` header was being overwritten by
+   Cloudflare's CDN layer. Had to add ETag-based cache busting and still
+   need manual cache purge on deploy.
+
+8. **Font choices** — Started with Cinzel (headings) + Inter (body) +
+   Fira Code (mono). Changed to Bungee (headings) + Space Mono (body/UI).
+   Had to update every template, layout, and CSS file. Then the Space Mono
+   leaked into Excalidraw. The font saga continues.
+
+9. **Mobile nav** — Built a hamburger menu with vanilla JS (`toggleMobileMenu()`).
+   Used `md:hidden`/`md:flex` for responsive visibility. Then discovered the
+   responsive classes weren't being generated. See item 5.
+
+10. **Auth bar OOB swap** — `UserHandler` returns HTML for both `#auth-bar`
+    (desktop) and `#auth-bar-mobile` (mobile) with `hx-swap-oob="true"`.
+    The mobile version has a stacked layout with full-width logout button.
+    This required changing the handler to return both elements in a single
+    response, which HTMX then surgically inserts into the DOM.
+
+## Design System
+
+**Catppuccin Brutalist** — sharp corners, hard offset shadows, Catppuccin palette.
+
+- **Fonts:** Bungee (headings), Space Mono (body/UI)
+- **Borders:** 2px solid, always
+- **Shadows:** Hard offset (`2px 2px`, `4px 4px`, `6px 6px`, `8px 8px`), no blur
+- **Colors:** Catppuccin Latte (light) + Mocha (dark) with extended accent tokens
+- **Buttons:** Translate on active (`translate-x-0.5 translate-y-0.5`), shadow disappears
+- **Radius:** Zero. Everywhere. No exceptions.
+- **Grid:** Subtle colored grid lines (pink/blue light, mauve/lavender dark)
+
+### Color Tokens
+
+| Token | Latte (Light) | Mocha (Dark) | Usage |
+|---|---|---|---|
+| `--accent` | `#8839ef` | `#cba6f7` | Primary actions |
+| `--mauve` | `#8839ef` | `#cba6f7` | Secondary accent |
+| `--pink` | `#ea76cb` | `#f5c2e7` | Feature cards, hover states |
+| `--peach` | `#fe640b` | `#fab387` | Accent borders |
+| `--teal` | `#179299` | `#94e2d5` | Feature cards |
+| `--blue` | `#1e66f5` | `#89b4fa` | Grid lines, links |
+| `--lavender` | `#7287fd` | `#b4befe` | Grid lines, secondary |
 
 ## Load Testing
 
@@ -287,7 +411,6 @@ Ran k6 load tests against the live server. Results at 500 VUs:
 | Error rate | 10.76% (all Cloudflare connection resets, 0% application errors) |
 | p95 latency | 739ms (Cloudflare overhead, not server) |
 | CRUD checks | 100% pass (create, save, load, rename, share, delete) |
-| Share bug | Fixed: was returning 100% errors due to NULL `share_slug` scan |
 
 The 10% error rate is entirely Cloudflare dropping connections during the
 ramp-up, not the server rejecting requests. The Go binary handles 500
@@ -304,29 +427,6 @@ SQLite is simpler than Firestore. No indexes to manage, no billing surprises,
 no "document size limit." A single `canvas.db` file with WAL mode handles
 everything I need. And it's backed up with a `cp` command.
 
-## The Excalidraw CSS Situation
+## License
 
-Excalidraw ships a minified CSS file that's about 145KB on one line. It
-gets embedded in the Go binary and served as a static file. There's also
-a brutalist override CSS that fixes the aesthetic clash between our sharp
-colorful theme and Excalidraw's rounded-corner default.
-
-If Excalidraw updates their CSS classes between versions, the overrides
-will break. I've pinned the version to `0.18.1` to delay this as long as
-possible. When it happens, I'll spend an hour updating selectors and
-muttering about CSS specificity. That's a future problem. Future me is
-very understanding.
-
-## Design System
-
-"Colorful Brutalist" — sharp corners, hard offset shadows, vibrant palette.
-
-- **Fonts:** Cinzel (headings), Inter (body), Fira Code (mono)
-- **Borders:** 2px solid, always
-- **Shadows:** Hard offset (`4px 4px 0px`), no blur
-- **Colors:** High-contrast primaries — electric pink, cyan, lime green, amber
-- **Buttons:** Translate on active (`translate-x-0.5 translate-y-0.5`), shadow disappears
-- **Radius:** Zero. Everywhere. No exceptions.
-- **Light mode:** White bg, black borders, neon accents
-- **Dark mode:** Near-black bg, white borders, cyan/magenta/lime accents
-- **Grid:** Subtle colored grid lines (pink/blue light, cyan/magenta dark)
+Made with spite and too many hours debugging CSS that should have worked.
