@@ -26,7 +26,7 @@ func Middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		token, err := FirebaseAuth.VerifySessionCookie(r.Context(), cookie.Value)
+		token, err := FirebaseAuth.VerifySessionCookie(context.Background(), cookie.Value)
 		if err != nil {
 			log.Printf("session cookie invalid: %v", err)
 			http.SetCookie(w, &http.Cookie{

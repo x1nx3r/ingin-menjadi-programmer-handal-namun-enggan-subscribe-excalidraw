@@ -12,6 +12,7 @@ import (
 	"gotth/app/canvas"
 	"gotth/app/dashboard"
 	"gotth/app/docs"
+	"gotth/app/profile"
 	_ "github.com/a-h/templ"
 )
 
@@ -50,6 +51,16 @@ func main() {
 	// Canvas data API
 	mux.Handle("GET /api/draw/{id}/data", auth.RequireAuth(canvas.DataHandler))
 	mux.Handle("POST /api/draw/{id}/save", auth.RequireAuth(canvas.SaveHandler))
+	mux.Handle("POST /api/draw/{id}/share", auth.RequireAuth(canvas.ShareHandler))
+	mux.Handle("PUT /api/draw/{id}/rename", auth.RequireAuth(canvas.RenameHandler))
+	mux.Handle("POST /api/draw/{id}/thumbnail", auth.RequireAuth(canvas.ThumbnailHandler))
+
+	// Shared (public read-only)
+	mux.HandleFunc("GET /shared/{slug}", canvas.SharedPageHandler)
+	mux.HandleFunc("GET /api/shared/{slug}/data", canvas.SharedDataHandler)
+
+	// Profile
+	mux.Handle("GET /profile", auth.RequireAuth(profile.PageHandler))
 
 	// Docs
 	mux.HandleFunc("GET /docs", docs.PageHandler)
@@ -59,7 +70,7 @@ func main() {
 
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "3001"
+		port = "3000"
 	}
 	addr := ":" + port
 	fmt.Printf("Canvas running at http://localhost%s\n", addr)

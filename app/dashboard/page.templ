@@ -51,7 +51,7 @@ templ DashboardPage(drawings []Drawing) {
 							@components.EmptyState()
 						} else {
 							for _, d := range drawings {
-								@components.DrawingCard(d.ID, d.Title, d.UpdatedAt)
+								@components.DrawingCard(d.ID, d.Title, d.UpdatedAt, d.Thumbnail)
 							}
 						}
 					</div>

@@ -58,10 +58,17 @@ css:
 	@which $(TAILWIND_BIN) > /dev/null && $(TAILWIND_BIN) -i app/globals.css -o app/assets/globals.css.output --minify || npx @tailwindcss/cli -i app/globals.css -o app/assets/globals.css.output --minify
 
 ## dev: Run live-reloading dev server
-dev: $(TAILWIND_BIN)
+dev: $(TAILWIND_BIN) bundle
 	@$(MAKE) css
 	@bash -c 'trap "kill 0" EXIT; $(TAILWIND_BIN) -i app/globals.css -o app/assets/globals.css.output --watch & air; wait'
 
+## bundle: Bundle Excalidraw with esbuild
+bundle: app/assets/excalidraw/node_modules
+	npx esbuild app/assets/excalidraw/entry.js --bundle --outfile=app/assets/public/excalidraw.bundle.js --minify --format=iife --global-name=ExcalidrawBundle
+
+app/assets/excalidraw/node_modules: app/assets/excalidraw/package.json
+	cd app/assets/excalidraw && npm install
+
 ## build: Compile production server binary and assets
-build: css templ
+build: css templ bundle
 	go build -o $(APP_BIN) main.go

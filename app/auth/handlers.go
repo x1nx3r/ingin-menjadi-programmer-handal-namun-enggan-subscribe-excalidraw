@@ -4,6 +4,7 @@ import (
 	"html"
 	"log"
 	"net/http"
+	"time"
 )
 
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
@@ -13,7 +14,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cookie, err := FirebaseAuth.SessionCookie(r.Context(), idToken, 14*24*60*60)
+	cookie, err := FirebaseAuth.SessionCookie(r.Context(), idToken, 14*24*time.Hour)
 	if err != nil {
 		log.Printf("session cookie creation: %v", err)
 		http.Error(w, "auth failed", http.StatusUnauthorized)

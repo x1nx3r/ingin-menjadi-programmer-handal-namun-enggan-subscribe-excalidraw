@@ -6,6 +6,8 @@ import (
 	"log"
 	"net/http"
 	"time"
+
+	"cloud.google.com/go/firestore"
 	"gotth/app/auth"
 )
 
@@ -42,13 +44,7 @@ func DataHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sceneStr, _ := data["sceneData"].(string)
-	if sceneStr == "" {
-		sceneStr = `{"elements":[],"appState":{}}`
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(sceneStr))
+	sanitizedSceneData(w, data["sceneData"])
 }
 
 func SaveHandler(w http.ResponseWriter, r *http.Request) {
@@ -75,7 +71,7 @@ func SaveHandler(w http.ResponseWriter, r *http.Request) {
 	_, err = auth.Firestore.Collection("drawings").Doc(id).Set(r.Context(), map[string]interface{}{
 		"sceneData": string(body),
 		"updatedAt": time.Now(),
-	}, nil)
+	}, firestore.MergeAll)
 	if err != nil {
 		log.Printf("save drawing %s: %v", id, err)
 		http.Error(w, "save failed", http.StatusInternalServerError)

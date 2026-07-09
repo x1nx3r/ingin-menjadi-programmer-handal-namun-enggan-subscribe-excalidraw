@@ -2,14 +2,16 @@ package components
 
 import "time"
 
-templ DrawingCard(id string, title string, updatedAt time.Time) {
+templ DrawingCard(id string, title string, updatedAt time.Time, thumbnail string) {
 	<a
 		href={ templ.SafeURL("/draw/" + id) }
 		hx-boost="false"
 		class="block rounded-none border-2 border-[var(--border)] bg-[var(--bg)] p-6 shadow-[4px_4px_0px_0px_var(--border)] transition-all hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[6px_6px_0px_0px_var(--border)]"
 	>
-		<div class="h-32 mb-4 border-2 border-[var(--bg-subtle)] bg-[var(--bg-subtle)] flex items-center justify-center">
-			<span class="text-3xl font-black text-[var(--fg-muted)]">{""}</span>
+		<div class="h-32 mb-4 border-2 border-[var(--bg-subtle)] bg-[var(--bg-subtle)] flex items-center justify-center overflow-hidden">
+			if thumbnail != "" {
+				<img src={ thumbnail } alt="" class="w-full h-full object-cover"/>
+			}
 		</div>
 		<h3 class="text-sm font-extrabold text-[var(--fg)] tracking-tight uppercase truncate">{ title }</h3>
 		<p class="mt-1 text-[10px] font-mono font-bold text-[var(--fg-muted)] uppercase tracking-wider">{ updatedAt.Format("Jan 2, 2006 3:04 PM") }</p>

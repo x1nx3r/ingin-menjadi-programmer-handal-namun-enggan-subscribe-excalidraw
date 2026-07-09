@@ -3,10 +3,10 @@ package dashboard
 import (
 	"log"
 	"net/http"
+	"sort"
 	"time"
 	"gotth/app/auth"
 
-	"cloud.google.com/go/firestore"
 	"google.golang.org/api/iterator"
 )
 
@@ -15,6 +15,7 @@ type Drawing struct {
 	Title     string
 	CreatedAt time.Time
 	UpdatedAt time.Time
+	Thumbnail string
 }
 
 func PageHandler(w http.ResponseWriter, r *http.Request) {
@@ -26,7 +27,6 @@ func PageHandler(w http.ResponseWriter, r *http.Request) {
 
 	iter := auth.Firestore.Collection("drawings").
 		Where("ownerId", "==", uid).
-		OrderBy("updatedAt", firestore.Desc).
 		Documents(r.Context())
 
 	var drawings []Drawing
@@ -43,6 +43,10 @@ func PageHandler(w http.ResponseWriter, r *http.Request) {
 		doc.DataTo(&d)
 		drawings = append(drawings, d)
 	}
+
+	sort.Slice(drawings, func(i, j int) bool {
+		return drawings[i].UpdatedAt.After(drawings[j].UpdatedAt)
+	})
 
 	DashboardPage(drawings).Render(r.Context(), w)
 }

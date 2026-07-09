@@ -1,0 +1,130 @@
+/* Excalidraw → Goth-Brutalist overrides
+   Load after excalidraw.css */
+
+/* ─── Theme color overrides (CSS variables) ─── */
+.excalidraw {
+  --island-bg-color: var(--bg);
+  --popup-bg-color: var(--bg);
+  --default-bg-color: var(--bg);
+  --input-bg-color: var(--bg-subtle);
+  --input-hover-bg-color: var(--bg-subtle);
+  --input-border-color: var(--border);
+  --button-hover-bg: var(--bg-subtle);
+  --button-active-bg: var(--bg-subtle);
+  --color-surface-high: var(--bg-subtle);
+  --color-surface-mid: var(--bg);
+  --color-surface-low: var(--bg-subtle);
+  --color-surface-lowest: var(--bg);
+  --color-on-surface: var(--fg);
+  --text-primary-color: var(--fg);
+  --icon-fill-color: var(--fg);
+  --keybinding-color: var(--fg-muted);
+  --link-color: var(--accent);
+  --ui-font: 'Inter', system-ui, -apple-system, sans-serif;
+  --border-radius-md: 0px;
+  --border-radius-lg: 0px;
+  --shadow-island: 4px 4px 0px 0px var(--border);
+  --modal-shadow: 4px 4px 0px 0px var(--border);
+  --sidebar-shadow: 4px 4px 0px 0px var(--border);
+  --default-border-color: var(--border);
+  --dialog-border-color: var(--border);
+}
+
+/* ─── Kill the centered-demo mode on root ─── */
+.excalidraw {
+  min-height: unset !important;
+  padding: 0 !important;
+  align-items: stretch !important;
+  justify-content: flex-start !important;
+}
+
+/* ─── Panels / Islands ─── */
+.excalidraw :where(.Island) {
+  border-radius: 0 !important;
+  box-shadow: 4px 4px 0px 0px var(--border) !important;
+}
+
+/* ─── Buttons ─── */
+.excalidraw :where(.ToolIcon) {
+  border-radius: 0 !important;
+}
+
+.excalidraw :where(.ToolIcon__icon) {
+  border-radius: 0 !important;
+}
+
+.excalidraw :where(.ToolIcon_type_radio, .ToolIcon_type_checkbox) {
+  border-radius: 0 !important;
+}
+
+.excalidraw :where(.ToolIcon_type_radio) .ToolIcon__icon {
+  box-shadow: 2px 2px 0px 0px var(--border) !important;
+}
+
+.excalidraw :where(.ToolIcon_type_radio, .ToolIcon_type_checkbox):where(:checked, .active) .ToolIcon__icon {
+  box-shadow: 0px 0px 0px 2px var(--accent), inset 0 0 0 1px var(--accent) !important;
+}
+
+.excalidraw :where(.excalidraw-button, .ExcButton) {
+  border-radius: 0 !important;
+  box-shadow: 2px 2px 0px 0px var(--border) !important;
+  border-width: 2px !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  font-size: 0.7rem !important;
+}
+
+.excalidraw :where(.excalidraw-button, .ExcButton):active {
+  box-shadow: 0px 0px 0px 0px var(--border) !important;
+  translate: 2px 2px !important;
+}
+
+.excalidraw button:where(.active, [aria-pressed="true"]) {
+  box-shadow: inset 2px 2px 0px 0px rgba(0,0,0,0.15) !important;
+}
+
+/* ─── Chrome borders ─── */
+.excalidraw .App-top-bar {
+  border-bottom: 2px solid var(--border) !important;
+}
+
+.excalidraw .layer-ui {
+  border-right: 2px solid var(--border) !important;
+}
+
+/* ─── Modals ─── */
+.excalidraw :where(.excalidraw-modal, .HelpDialog, .StatsDialog) {
+  border-radius: 0 !important;
+  border: 2px solid var(--border) !important;
+  box-shadow: 4px 4px 0px 0px var(--border) !important;
+}
+
+/* ─── Inputs ─── */
+.excalidraw input:not([type="radio"]):not([type="checkbox"]),
+.excalidraw textarea,
+.excalidraw select {
+  border-radius: 0 !important;
+  border-width: 2px !important;
+  box-shadow: 2px 2px 0px 0px var(--border) !important;
+}
+
+/* ─── Dropdowns ─── */
+.excalidraw :where(.dropdown-menu, .exc-dropdown) {
+  border-radius: 0 !important;
+  border: 2px solid var(--border) !important;
+  box-shadow: 4px 4px 0px 0px var(--border) !important;
+}
+
+/* ─── Tooltips ─── */
+.excalidraw :where(.excalidraw-tooltip) {
+  border-radius: 0 !important;
+  border: 1px solid var(--border) !important;
+}
+
+/* ─── Color picker ─── */
+.excalidraw :where(.color-picker) {
+  border-radius: 0 !important;
+  border: 2px solid var(--border) !important;
+  box-shadow: 4px 4px 0px 0px var(--border) !important;
+}

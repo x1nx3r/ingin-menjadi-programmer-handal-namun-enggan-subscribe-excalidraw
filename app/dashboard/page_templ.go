@@ -50,7 +50,7 @@ func DashboardPage(drawings []Drawing) templ.Component {
 			}
 		} else {
 			for _, d := range drawings {
-				templ_7745c5c3_Err = components.DrawingCard(d.ID, d.Title, d.UpdatedAt).Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = components.DrawingCard(d.ID, d.Title, d.UpdatedAt, d.Thumbnail).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
