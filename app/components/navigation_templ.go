@@ -123,8 +123,8 @@ func NavLink(href string, currentPath string, label string) templ.Component {
 		}
 		ctx = templ.ClearChildren(ctx)
 		var templ_7745c5c3_Var4 = []any{"px-3 py-1.5 border-2 text-xs font-bold uppercase tracking-wider transition-all",
-			templ.KV("bg-[var(--bg-subtle)] border-[var(--border)] text-[var(--fg)] shadow-none translate-x-0.5 translate-y-0.5", currentPath == href),
-			templ.KV("border-transparent text-[var(--fg-muted)] hover:text-[var(--fg)] hover:border-[var(--border)] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none hover:shadow-[2px_2px_0px_0px_var(--border)]", currentPath != href),
+			templ.KV("bg-[var(--accent)] border-[var(--accent)] text-[var(--accent-fg)] shadow-none translate-x-0.5 translate-y-0.5", currentPath == href),
+			templ.KV("border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent)] hover:text-[var(--accent-fg)] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none hover:shadow-[2px_2px_0px_0px_var(--accent)]", currentPath != href),
 		}
 		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var4...)
 		if templ_7745c5c3_Err != nil {

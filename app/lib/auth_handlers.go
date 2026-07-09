@@ -5,7 +5,7 @@ import (
 	"net/http"
 )
 
-const navBtnClass = `px-3 py-1.5 border-2 border-[var(--border)] text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-[var(--bg-subtle)] transition-all active:translate-x-0.5 active:translate-y-0.5 active:shadow-none shadow-[2px_2px_0px_0px_var(--border)]`
+const navBtnClass = `px-3 py-1.5 border-2 border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-fg)] text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-[var(--mauve)] transition-all active:translate-x-0.5 active:translate-y-0.5 active:shadow-none shadow-[2px_2px_0px_0px_var(--accent)]`
 
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {

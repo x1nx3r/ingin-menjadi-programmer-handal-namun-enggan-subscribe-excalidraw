@@ -1,6 +1,9 @@
 package canvas
 
-import "gotth/app"
+import (
+	"gotth/app"
+	"gotth/app/components"
+)
 
 templ SharedPage(title string, slug string) {
 	@app.CanvasLayout(title) {
@@ -10,16 +13,7 @@ templ SharedPage(title string, slug string) {
 		</style>
 		<header class="sticky top-0 z-50 w-full border-b-2 border-[var(--border)] bg-[var(--bg)]/95">
 			<div class="mx-auto flex h-14 max-w-7xl items-center justify-between px-6 lg:px-8">
-				<a href="/" class="flex items-center gap-2.5 font-black tracking-tight text-[var(--fg)] select-none group">
-					<div class="h-8 w-8 border-2 border-[var(--border)] p-1 flex items-center justify-center shadow-[2px_2px_0px_0px_var(--border)] transition-all group-active:translate-x-0.5 group-active:translate-y-0.5 group-active:shadow-none">
-						<svg viewBox="0 0 32 32" fill="none" class="h-full w-full text-[var(--fg)]">
-							<rect x="2" y="2" width="28" height="28" stroke="currentColor" stroke-width="2.5"/>
-							<path d="M8 24 L24 8" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"/>
-							<rect x="6" y="20" width="6" height="6" fill="currentColor"/>
-						</svg>
-					</div>
-						<span class="text-sm font-black uppercase tracking-[0.1em]">Ingin Menjadi Programmer Handal Namun Enggan Subscribe Excalidraw</span>
-				</a>
+				@components.Logo()
 				<span class="text-xs font-bold uppercase tracking-wider text-[var(--fg-muted)]">Read-only view</span>
 			</div>
 		</header>

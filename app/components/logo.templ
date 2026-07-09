@@ -2,13 +2,17 @@ package components
 
 templ Logo() {
 	<a href="/" class="flex items-center gap-2.5 font-black tracking-tight text-[var(--fg)] select-none group">
-		<div class="h-8 w-8 border-2 border-[var(--border)] p-1 flex items-center justify-center shadow-[2px_2px_0px_0px_var(--border)] transition-all group-active:translate-x-0.5 group-active:translate-y-0.5 group-active:shadow-none">
-			<svg viewBox="0 0 32 32" fill="none" class="h-full w-full text-[var(--fg)]">
+		<div class="h-8 w-8 border-2 border-[var(--accent)] p-1 flex items-center justify-center shadow-[2px_2px_0px_0px_var(--accent)] transition-all group-active:translate-x-0.5 group-active:translate-y-0.5 group-active:shadow-none">
+			<svg viewBox="0 0 32 32" fill="none" class="h-full w-full text-[var(--accent)]">
 				<rect x="2" y="2" width="28" height="28" stroke="currentColor" stroke-width="2.5"/>
 				<path d="M8 24 L24 8" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"/>
 				<rect x="6" y="20" width="6" height="6" fill="currentColor"/>
 			</svg>
 		</div>
-		<span class="text-xs font-black uppercase tracking-[0.1em]">Ingin Menjadi Programmer Handal Namun Enggan Subscribe Excalidraw</span>
+		<div class="flex flex-col leading-none">
+			<span class="text-[10px] font-black uppercase tracking-[0.15em] text-[var(--accent)]">Ingin Menjadi Programmer</span>
+			<span class="text-[10px] font-black uppercase tracking-[0.15em]">Handal Namun Enggan</span>
+			<span class="text-[10px] font-black uppercase tracking-[0.15em] text-[var(--mauve)]">Subscribe Excalidraw</span>
+		</div>
 	</a>
 }

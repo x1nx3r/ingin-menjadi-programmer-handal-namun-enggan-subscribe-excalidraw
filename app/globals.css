@@ -4,38 +4,46 @@
 
 @source "./**/*.templ";
 
-/* ─── Design Tokens (Colorful Brutalist) ───────────── */
+/* ─── Design Tokens (Catppuccin Brutalist) ─────────── */
 :root {
-  --bg:        #ffffff;
-  --bg-subtle: #f0f0f0;
-  --fg:        #000000;
-  --fg-muted:  #555555;
-  --border:    #000000;
-  --ring:      #0066FF;
-  --accent:    #FF0054;
-  --accent-fg: #ffffff;
-  --red:       #FF0054;
-  --green:     #00CC66;
-  --yellow:    #FFB800;
-  --cyan:      #00CCFF;
-  --magenta:   #FF00FF;
+  --bg:        #eff1f5;
+  --bg-subtle: #e6e9ef;
+  --fg:        #4c4f69;
+  --fg-muted:  #6c6f85;
+  --border:    #4c4f69;
+  --ring:      #8839ef;
+  --accent:    #8839ef;
+  --accent-fg: #eff1f5;
+  --red:       #d20f39;
+  --green:     #40a02b;
+  --yellow:    #df8e1d;
+  --blue:      #1e66f5;
+  --mauve:     #8839ef;
+  --pink:      #ea76cb;
+  --peach:     #fe640b;
+  --teal:      #179299;
+  --lavender:  #7287fd;
   --radius:    0px;
 }
 
 .dark {
-  --bg:        #0a0a0a;
-  --bg-subtle: #1a1a1a;
-  --fg:        #ffffff;
-  --fg-muted:  #888888;
-  --border:    #ffffff;
-  --ring:      #FF00FF;
-  --accent:    #00FFFF;
-  --accent-fg: #0a0a0a;
-  --red:       #FF3366;
-  --green:     #AAFF00;
-  --yellow:    #FFCC00;
-  --cyan:      #00FFFF;
-  --magenta:   #FF00FF;
+  --bg:        #1e1e2e;
+  --bg-subtle: #181825;
+  --fg:        #cdd6f4;
+  --fg-muted:  #a6adc8;
+  --border:    #cdd6f4;
+  --ring:      #cba6f7;
+  --accent:    #cba6f7;
+  --accent-fg: #1e1e2e;
+  --red:       #f38ba8;
+  --green:     #a6e3a1;
+  --yellow:    #f9e2af;
+  --blue:      #89b4fa;
+  --mauve:     #cba6f7;
+  --pink:      #f5c2e7;
+  --peach:     #fab387;
+  --teal:      #94e2d5;
+  --lavender:  #b4befe;
 }
 
 /* ─── Base ───────────────────────────────────────── */
@@ -56,15 +64,15 @@ body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   line-height: 1.5;
   background-image: 
-    linear-gradient(to right, rgba(255, 0, 84, 0.08) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(0, 102, 255, 0.08) 1px, transparent 1px);
+    linear-gradient(to right, rgba(136, 57, 239, 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(30, 102, 245, 0.06) 1px, transparent 1px);
   background-size: 24px 24px;
 }
 
 .dark body {
   background-image: 
-    linear-gradient(to right, rgba(0, 255, 255, 0.06) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 0, 255, 0.06) 1px, transparent 1px);
+    linear-gradient(to right, rgba(203, 166, 247, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(137, 180, 250, 0.04) 1px, transparent 1px);
   background-size: 24px 24px;
 }
 

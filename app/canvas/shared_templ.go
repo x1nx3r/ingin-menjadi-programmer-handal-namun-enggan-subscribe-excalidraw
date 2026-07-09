@@ -8,7 +8,10 @@ package canvas
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
-import "gotth/app"
+import (
+	"gotth/app"
+	"gotth/app/components"
+)
 
 func SharedPage(title string, slug string) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
@@ -43,20 +46,28 @@ func SharedPage(title string, slug string) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<style>\n\t\t\thtml, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }\n\t\t\t#canvas-mount { width: 100vw; height: calc(100vh - 56px); min-height: 200px; }\n\t\t</style> <header class=\"sticky top-0 z-50 w-full border-b-2 border-[var(--border)] bg-[var(--bg)]/95\"><div class=\"mx-auto flex h-14 max-w-7xl items-center justify-between px-6 lg:px-8\"><a href=\"/\" class=\"flex items-center gap-2.5 font-black tracking-tight text-[var(--fg)] select-none group\"><div class=\"h-8 w-8 border-2 border-[var(--border)] p-1 flex items-center justify-center shadow-[2px_2px_0px_0px_var(--border)] transition-all group-active:translate-x-0.5 group-active:translate-y-0.5 group-active:shadow-none\"><svg viewBox=\"0 0 32 32\" fill=\"none\" class=\"h-full w-full text-[var(--fg)]\"><rect x=\"2\" y=\"2\" width=\"28\" height=\"28\" stroke=\"currentColor\" stroke-width=\"2.5\"></rect> <path d=\"M8 24 L24 8\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-linecap=\"square\"></path> <rect x=\"6\" y=\"20\" width=\"6\" height=\"6\" fill=\"currentColor\"></rect></svg></div><span class=\"text-sm font-black uppercase tracking-[0.1em]\">Ingin Menjadi Programmer Handal Namun Enggan Subscribe Excalidraw</span></a> <span class=\"text-xs font-bold uppercase tracking-wider text-[var(--fg-muted)]\">Read-only view</span></div></header><div id=\"canvas-mount\" data-slug=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<style>\n\t\t\thtml, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }\n\t\t\t#canvas-mount { width: 100vw; height: calc(100vh - 56px); min-height: 200px; }\n\t\t</style> <header class=\"sticky top-0 z-50 w-full border-b-2 border-[var(--border)] bg-[var(--bg)]/95\"><div class=\"mx-auto flex h-14 max-w-7xl items-center justify-between px-6 lg:px-8\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = components.Logo().Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<span class=\"text-xs font-bold uppercase tracking-wider text-[var(--fg-muted)]\">Read-only view</span></div></header><div id=\"canvas-mount\" data-slug=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var3 string
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(slug)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `app/canvas/shared.templ`, Line: 26, Col: 41}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `app/canvas/shared.templ`, Line: 20, Col: 41}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var3)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\"></div><script src=\"/static/excalidraw.bundle.js\"></script> <script>\n\t\t\t(function() {\n\t\t\t\tvar slug = document.getElementById('canvas-mount').dataset.slug;\n\t\t\t\tvar mount = document.getElementById('canvas-mount');\n\t\t\t\tvar React = window.ExcalidrawBundle.React;\n\t\t\t\tvar ReactDOM = window.ExcalidrawBundle.ReactDOM;\n\t\t\t\tvar Excalidraw = window.ExcalidrawBundle.Excalidraw;\n\t\t\t\tvar root = ReactDOM.createRoot(mount);\n\t\t\t\troot.render(React.createElement(Excalidraw, {\n\t\t\t\t\tviewModeEnabled: true,\n\t\t\t\t\ttheme: document.documentElement.classList.contains('dark') ? 'dark' : 'light',\n\t\t\t\t\texcalidrawAPI: function(api) {\n\t\t\t\t\t\tfetch('/api/shared/' + slug + '/data')\n\t\t\t\t\t\t\t.then(function(r) { return r.json(); })\n\t\t\t\t\t\t\t.then(function(data) {\n\t\t\t\t\t\t\t\tif (data && data.elements) {\n\t\t\t\t\t\t\t\t\tapi.updateScene({ elements: data.elements, appState: data.appState });\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t})\n\t\t\t\t\t\t\t.catch(function(e) { console.error('Load error:', e); });\n\t\t\t\t\t}\n\t\t\t\t}));\n\t\t\t})();\n\t\t</script>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\"></div><script src=\"/static/excalidraw.bundle.js\"></script> <script>\n\t\t\t(function() {\n\t\t\t\tvar slug = document.getElementById('canvas-mount').dataset.slug;\n\t\t\t\tvar mount = document.getElementById('canvas-mount');\n\t\t\t\tvar React = window.ExcalidrawBundle.React;\n\t\t\t\tvar ReactDOM = window.ExcalidrawBundle.ReactDOM;\n\t\t\t\tvar Excalidraw = window.ExcalidrawBundle.Excalidraw;\n\t\t\t\tvar root = ReactDOM.createRoot(mount);\n\t\t\t\troot.render(React.createElement(Excalidraw, {\n\t\t\t\t\tviewModeEnabled: true,\n\t\t\t\t\ttheme: document.documentElement.classList.contains('dark') ? 'dark' : 'light',\n\t\t\t\t\texcalidrawAPI: function(api) {\n\t\t\t\t\t\tfetch('/api/shared/' + slug + '/data')\n\t\t\t\t\t\t\t.then(function(r) { return r.json(); })\n\t\t\t\t\t\t\t.then(function(data) {\n\t\t\t\t\t\t\t\tif (data && data.elements) {\n\t\t\t\t\t\t\t\t\tapi.updateScene({ elements: data.elements, appState: data.appState });\n\t\t\t\t\t\t\t\t}\n\t\t\t\t\t\t\t})\n\t\t\t\t\t\t\t.catch(function(e) { console.error('Load error:', e); });\n\t\t\t\t\t}\n\t\t\t\t}));\n\t\t\t})();\n\t\t</script>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

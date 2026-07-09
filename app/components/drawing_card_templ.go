@@ -31,7 +31,7 @@ func DrawingCard(id string, title string, updatedAt time.Time, thumbnail string)
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"border-2 border-[var(--border)] bg-[var(--bg)] shadow-[4px_4px_0px_0px_var(--border)] transition-all hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[6px_6px_0px_0px_var(--border)]\" data-id=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"border-2 border-[var(--border)] bg-[var(--bg)] shadow-[4px_4px_0px_0px_var(--border)] transition-all hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[6px_6px_0px_0px_var(--accent)]\" data-id=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -106,7 +106,7 @@ func DrawingCard(id string, title string, updatedAt time.Time, thumbnail string)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</p></a><div class=\"flex border-t-2 border-[var(--border)]\"><button onclick=\"event.stopPropagation(); var id=this.closest('[data-id]').dataset.id; var t=prompt('Rename drawing:'); if(t) fetch('/api/draw/'+id+'/rename',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:t})}).then(function(){window.location.reload()})\" class=\"flex-1 py-2 text-[10px] font-bold uppercase tracking-wider border-r-2 border-[var(--border)] text-[var(--fg-muted)] hover:bg-[var(--bg-subtle)] hover:text-[var(--fg)] transition-all cursor-pointer\">Rename</button> <button onclick=\"event.stopPropagation(); var id=this.closest('[data-id]').dataset.id; if(confirm('Delete this drawing?')) fetch('/api/draw/'+id,{method:'DELETE'}).then(function(){window.location.reload()})\" class=\"flex-1 py-2 text-[10px] font-bold uppercase tracking-wider text-[var(--red)] hover:bg-[var(--red)] hover:text-[var(--accent-fg)] transition-all cursor-pointer\">Delete</button></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</p></a><div class=\"flex border-t-2 border-[var(--border)]\"><button onclick=\"event.stopPropagation(); var id=this.closest('[data-id]').dataset.id; var t=prompt('Rename drawing:'); if(t) fetch('/api/draw/'+id+'/rename',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:t})}).then(function(){window.location.reload()})\" class=\"flex-1 py-2 text-[10px] font-bold uppercase tracking-wider border-r-2 border-[var(--border)] text-[var(--fg-muted)] hover:bg-[var(--accent)] hover:text-[var(--accent-fg)] transition-all cursor-pointer\">Rename</button> <button onclick=\"event.stopPropagation(); var id=this.closest('[data-id]').dataset.id; if(confirm('Delete this drawing?')) fetch('/api/draw/'+id,{method:'DELETE'}).then(function(){window.location.reload()})\" class=\"flex-1 py-2 text-[10px] font-bold uppercase tracking-wider text-[var(--red)] hover:bg-[var(--red)] hover:text-[var(--accent-fg)] transition-all cursor-pointer\">Delete</button></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
