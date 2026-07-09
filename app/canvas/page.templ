@@ -15,7 +15,7 @@ templ CanvasPage(title string, drawingId string) {
 			<link href="https://fonts.googleapis.com/css2?family=Bungee&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
 			<link rel="stylesheet" href="/globals.css"/>
 			<link rel="stylesheet" href="/static/excalidraw.css"/>
-			<link rel="stylesheet" href="/static/excalidraw-brutalist.css"/>
+			<!-- <link rel="stylesheet" href="/static/excalidraw-brutalist.css"/> -->
 			<script src="https://unpkg.com/htmx.org@2.0.4" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous"></script>
 			<script>
 				(function() {
@@ -27,35 +27,60 @@ templ CanvasPage(title string, drawingId string) {
 			</script>
 			<style>
 				html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
-				#canvas-mount { width: 100vw; height: calc(100vh - 56px); min-height: 200px; }
+				#canvas-mount { width: 100%; height: calc(100vh - 56px); min-height: 200px; }
 			</style>
 		</head>
 		<body class="h-full bg-[var(--bg)] text-[var(--fg)] antialiased">
-			<div class="flex items-center gap-2 sm:gap-3 px-3 sm:px-6 h-14 border-b-2 border-[var(--border)] bg-[var(--bg)]/95" id="title-bar">
-				<div class="hidden sm:block">
-					@components.Logo()
-				</div>
+			<div class="flex items-center gap-2 sm:gap-3 px-3 sm:px-6 h-14 border-b-2 border-[var(--border)] bg-[var(--bg)]/95 relative" id="title-bar">
+				@components.Logo()
 				<input id="title-input" type="text" value={ title } onchange="renameDrawing(this.value)"
 					class="flex-1 min-w-0 bg-transparent text-xs sm:text-sm font-bold uppercase tracking-wider border-none outline-none text-[var(--fg)]"/>
-				<button onclick="saveDrawing()" class="px-2 sm:px-3 py-1.5 border-2 border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-fg)] text-[10px] font-bold uppercase tracking-wider cursor-pointer hover:bg-[var(--mauve)] transition-all active:translate-x-0.5 active:translate-y-0.5 active:shadow-none shadow-[2px_2px_0px_0px_var(--accent)]">Save</button>
-				<button id="share-btn" onclick="shareDrawing()" class="px-2 sm:px-3 py-1.5 border-2 border-[var(--border)] text-[10px] font-bold uppercase tracking-wider cursor-pointer hover:bg-[var(--bg-subtle)] transition-all active:translate-x-0.5 active:translate-y-0.5 active:shadow-none shadow-[2px_2px_0px_0px_var(--border)]">Share</button>
-				<div class="hidden md:block">
+				<div class="hidden sm:flex items-center gap-2 sm:gap-3">
+					<button onclick="saveDrawing()" class="px-3 py-1.5 border-2 border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-fg)] text-[10px] font-bold uppercase tracking-wider cursor-pointer hover:bg-[var(--mauve)] transition-all active:translate-x-0.5 active:translate-y-0.5 active:shadow-none shadow-[2px_2px_0px_0px_var(--accent)]">Save</button>
+					<button id="share-btn" onclick="shareDrawing()" class="px-3 py-1.5 border-2 border-[var(--border)] text-[10px] font-bold uppercase tracking-wider cursor-pointer hover:bg-[var(--bg-subtle)] transition-all active:translate-x-0.5 active:translate-y-0.5 active:shadow-none shadow-[2px_2px_0px_0px_var(--border)]">Share</button>
 					@components.NavLink("/drawings", "", "Drawings")
+					<div id="auth-bar" hx-get="/auth/user" hx-trigger="load" hx-swap="outerHTML"></div>
+					<button
+						id="theme-toggle"
+						onclick="toggleTheme()"
+						class="flex h-8 w-8 items-center justify-center border-2 border-[var(--border)] bg-[var(--bg)] text-[var(--fg)] hover:bg-[var(--bg-subtle)] cursor-pointer transition-all active:translate-x-0.5 active:translate-y-0.5 active:shadow-none shadow-[2px_2px_0px_0px_var(--border)]"
+						aria-label="Toggle dark mode"
+					>
+						<svg class="hidden dark:block h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m12.728 12.728l.707.707M12 8a4 4 0 100 8 4 4 0 000-8z"/>
+						</svg>
+						<svg class="block dark:hidden h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+						</svg>
+					</button>
 				</div>
-				<div id="auth-bar" hx-get="/auth/user" hx-trigger="load" hx-swap="outerHTML"></div>
 				<button
-					id="theme-toggle"
-					onclick="toggleTheme()"
-					class="flex h-8 w-8 items-center justify-center border-2 border-[var(--border)] bg-[var(--bg)] text-[var(--fg)] hover:bg-[var(--bg-subtle)] cursor-pointer transition-all active:translate-x-0.5 active:translate-y-0.5 active:shadow-none shadow-[2px_2px_0px_0px_var(--border)]"
-					aria-label="Toggle dark mode"
+					onclick="document.getElementById('canvas-menu').classList.toggle('hidden')"
+					class="flex sm:hidden h-8 w-8 items-center justify-center border-2 border-[var(--border)] bg-[var(--bg)] text-[var(--fg)] hover:bg-[var(--bg-subtle)] cursor-pointer transition-all active:translate-x-0.5 active:translate-y-0.5 active:shadow-none shadow-[2px_2px_0px_0px_var(--border)]"
+					aria-label="Menu"
 				>
-					<svg class="hidden dark:block h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m12.728 12.728l.707.707M12 8a4 4 0 100 8 4 4 0 000-8z"/>
-					</svg>
-					<svg class="block dark:hidden h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+					<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+						<path stroke-linecap="square" d="M4 6h16M4 12h16M4 18h16"/>
 					</svg>
 				</button>
+				<div id="canvas-menu" class="hidden absolute top-14 right-3 sm:right-6 z-50 border-2 border-[var(--border)] bg-[var(--bg)] p-3 shadow-[4px_4px_0px_0px_var(--border)] flex flex-col gap-2 min-w-[160px]">
+					<button onclick="saveDrawing(); document.getElementById('canvas-menu').classList.add('hidden')" class="w-full px-3 py-1.5 border-2 border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-fg)] text-[10px] font-bold uppercase tracking-wider cursor-pointer hover:bg-[var(--mauve)] transition-all active:translate-x-0.5 active:translate-y-0.5 active:shadow-none shadow-[2px_2px_0px_0px_var(--accent)]">Save</button>
+					<button onclick="shareDrawing(); document.getElementById('canvas-menu').classList.add('hidden')" class="w-full px-3 py-1.5 border-2 border-[var(--border)] text-[10px] font-bold uppercase tracking-wider cursor-pointer hover:bg-[var(--bg-subtle)] transition-all active:translate-x-0.5 active:translate-y-0.5 active:shadow-none shadow-[2px_2px_0px_0px_var(--border)]">Share</button>
+					<a href="/drawings" class="w-full px-3 py-1.5 border-2 border-[var(--border)] text-[10px] font-bold uppercase tracking-wider cursor-pointer hover:bg-[var(--bg-subtle)] transition-all active:translate-x-0.5 active:translate-y-0.5 active:shadow-none shadow-[2px_2px_0px_0px_var(--border)] text-center">Drawings</a>
+					<div id="auth-bar-mobile" hx-get="/auth/user" hx-trigger="load" hx-swap="outerHTML"></div>
+					<button
+						onclick="toggleTheme()"
+						class="w-full flex items-center justify-center gap-2 h-8 border-2 border-[var(--border)] bg-[var(--bg)] text-[var(--fg)] hover:bg-[var(--bg-subtle)] cursor-pointer transition-all active:translate-x-0.5 active:translate-y-0.5 active:shadow-none shadow-[2px_2px_0px_0px_var(--border)]"
+						aria-label="Toggle dark mode"
+					>
+						<svg class="hidden dark:block h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m12.728 12.728l.707.707M12 8a4 4 0 100 8 4 4 0 000-8z"/>
+						</svg>
+						<svg class="block dark:hidden h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+						</svg>
+					</button>
+				</div>
 			</div>
 			<div id="share-dialog" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40" onclick="if(event.target===this)closeShare()">
 				<div class="max-w-md w-full mx-4 border-2 border-[var(--border)] bg-[var(--bg)] p-6 shadow-[4px_4px_0px_0px_var(--border)]">
@@ -91,6 +116,7 @@ templ CanvasPage(title string, drawingId string) {
 					root.render(React.createElement(Excalidraw, {
 						excalidrawAPI: function(api) {
 							window.excalidrawAPI = api;
+							window.dispatchEvent(new Event('resize'));
 							fetch('/api/draw/' + id + '/data')
 								.then(function(r) { return r.json(); })
 								.then(function(data) {
