@@ -8,7 +8,10 @@ package dashboard
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
-import "gotth/app/components"
+import (
+	"gotth/app"
+	"gotth/app/components"
+)
 
 func DashboardPage(drawings []Drawing) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
@@ -31,40 +34,42 @@ func DashboardPage(drawings []Drawing) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<!doctype html><html lang=\"en\" class=\"h-full\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>Your Drawings — Udin's Canvas</title><link rel=\"icon\" type=\"image/svg+xml\" href=\"/static/logo.svg\"><link rel=\"preconnect\" href=\"https://fonts.googleapis.com\"><link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin=\"anonymous\"><link href=\"https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fira+Code:wght@400;700&display=swap\" rel=\"stylesheet\"><link rel=\"stylesheet\" href=\"/globals.css\"><script src=\"https://unpkg.com/htmx.org@2.0.4\" integrity=\"sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+\" crossorigin=\"anonymous\"></script><script src=\"https://www.gstatic.com/firebasejs/12.15.0/firebase-app-compat.js\"></script><script src=\"https://www.gstatic.com/firebasejs/12.15.0/firebase-auth-compat.js\"></script><script>\n\t\t\t\tfirebase.initializeApp({\n\t\t\t\t\tapiKey: \"AIzaSyC4uHw6X_ugSXKqVEiio3y24LqTPTPD27w\",\n\t\t\t\t\tauthDomain: \"canvas-78802.firebaseapp.com\",\n\t\t\t\t\tprojectId: \"canvas-78802\",\n\t\t\t\t\tstorageBucket: \"canvas-78802.firebasestorage.app\",\n\t\t\t\t\tmessagingSenderId: \"384877248276\",\n\t\t\t\t\tappId: \"1:384877248276:web:61d08dffd5f19d0f358c01\",\n\t\t\t\t});\n\t\t\t\t(function() {\n\t\t\t\t\tvar t = localStorage.getItem('theme');\n\t\t\t\t\tif (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {\n\t\t\t\t\t\tdocument.documentElement.classList.add('dark');\n\t\t\t\t\t}\n\t\t\t\t})();\n\t\t\t</script></head><body hx-boost=\"true\" hx-swap=\"innerHTML transition:true\" class=\"min-h-full flex flex-col bg-[var(--bg)] text-[var(--fg)] antialiased\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = components.Navigation("/drawings", false).Render(ctx, templ_7745c5c3_Buffer)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<div class=\"flex flex-col flex-1\"><div class=\"mx-auto max-w-5xl px-6 py-16 lg:px-8 w-full\"><div class=\"flex items-center justify-between mb-12\"><div><h1 class=\"text-4xl font-black text-[var(--fg)] tracking-tight\">Your Drawings</h1><p class=\"mt-2 text-xs font-bold text-[var(--fg-muted)] uppercase tracking-wider\">Create, edit, and share your Excalidraw canvases.</p></div><form action=\"/draw/new\" method=\"POST\" hx-boost=\"false\"><button type=\"submit\" class=\"inline-flex h-10 items-center border-2 border-[var(--border)] bg-[var(--fg)] px-6 text-xs font-bold uppercase tracking-wider text-[var(--bg)] transition-all hover:bg-[var(--bg-subtle)] hover:text-[var(--fg)] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none shadow-[4px_4px_0px_0px_var(--border)]\">New Drawing</button></form></div><div id=\"drawing-list\" class=\"grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if len(drawings) == 0 {
-			templ_7745c5c3_Err = components.EmptyState().Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Var2 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+			if !templ_7745c5c3_IsBuffer {
+				defer func() {
+					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+					if templ_7745c5c3_Err == nil {
+						templ_7745c5c3_Err = templ_7745c5c3_BufErr
+					}
+				}()
+			}
+			ctx = templ.InitializeContext(ctx)
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"mx-auto max-w-5xl px-6 py-16 lg:px-8 w-full\"><div class=\"flex items-center justify-between mb-12\"><div><h1 class=\"text-4xl font-black text-[var(--fg)] tracking-tight\">Your Drawings</h1><p class=\"mt-2 text-xs font-bold text-[var(--fg-muted)] uppercase tracking-wider\">Create, edit, and share your Excalidraw canvases.</p></div><form action=\"/draw/new\" method=\"POST\" hx-boost=\"false\"><button type=\"submit\" class=\"inline-flex h-10 items-center border-2 border-[var(--border)] bg-[var(--fg)] px-6 text-xs font-bold uppercase tracking-wider text-[var(--bg)] transition-all hover:bg-[var(--bg-subtle)] hover:text-[var(--fg)] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none shadow-[4px_4px_0px_0px_var(--border)]\">New Drawing</button></form></div><div id=\"drawing-list\" class=\"grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-		} else {
-			for _, d := range drawings {
-				templ_7745c5c3_Err = components.DrawingCard(d.ID, d.Title, d.UpdatedAt, d.Thumbnail).Render(ctx, templ_7745c5c3_Buffer)
+			if len(drawings) == 0 {
+				templ_7745c5c3_Err = components.EmptyState().Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
+			} else {
+				for _, d := range drawings {
+					templ_7745c5c3_Err = components.DrawingCard(d.ID, d.Title, d.UpdatedAt, d.Thumbnail).Render(ctx, templ_7745c5c3_Buffer)
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				}
 			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</div></div></div>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = components.Footer().Render(ctx, templ_7745c5c3_Buffer)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</body></html>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</div></div>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			return nil
+		})
+		templ_7745c5c3_Err = app.Layout("Your Drawings — Udin's Canvas", "/drawings").Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

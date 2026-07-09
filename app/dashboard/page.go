@@ -2,14 +2,12 @@ package dashboard
 
 import (
 	"crypto/rand"
-	"database/sql"
 	"encoding/hex"
 	"log"
 	"net/http"
 	"time"
 
-	"gotth/app/auth"
-	"gotth/app/db"
+	"gotth/app/lib"
 )
 
 type Drawing struct {
@@ -21,13 +19,13 @@ type Drawing struct {
 }
 
 func PageHandler(w http.ResponseWriter, r *http.Request) {
-	uid := auth.GetUserUID(r.Context())
+	uid := lib.GetUserUID(r.Context())
 	if uid == "" {
 		http.Redirect(w, r, "/", http.StatusFound)
 		return
 	}
 
-	rows, err := db.DB.QueryContext(r.Context(),
+	rows, err := lib.DB.QueryContext(r.Context(),
 		"SELECT id, title, created_at, updated_at, COALESCE(thumbnail, '') FROM drawings WHERE owner_id = ? ORDER BY updated_at DESC", uid)
 	if err != nil {
 		log.Printf("query drawings: %v", err)
@@ -50,7 +48,7 @@ func PageHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func NewHandler(w http.ResponseWriter, r *http.Request) {
-	uid := auth.GetUserUID(r.Context())
+	uid := lib.GetUserUID(r.Context())
 	if uid == "" {
 		http.Redirect(w, r, "/", http.StatusFound)
 		return
@@ -61,7 +59,7 @@ func NewHandler(w http.ResponseWriter, r *http.Request) {
 	id := hex.EncodeToString(b)
 
 	now := time.Now()
-	_, err := db.DB.ExecContext(r.Context(),
+	_, err := lib.DB.ExecContext(r.Context(),
 		"INSERT INTO drawings (id, owner_id, title, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
 		id, uid, "Untitled", `{"elements":[],"appState":{}}`, now, now)
 	if err != nil {
@@ -72,11 +70,3 @@ func NewHandler(w http.ResponseWriter, r *http.Request) {
 
 	http.Redirect(w, r, "/draw/"+id, http.StatusFound)
 }
-
-func drawingExists(id string) bool {
-	var exists int
-	db.DB.QueryRow("SELECT 1 FROM drawings WHERE id = ?", id).Scan(&exists)
-	return exists == 1
-}
-
-var _ = sql.ErrNoRows

@@ -6,24 +6,25 @@ import (
 	"log"
 	"net/http"
 	"os"
+
 	"gotth/app"
+	"gotth/app/api"
 	"gotth/app/assets"
-	"gotth/app/auth"
 	"gotth/app/canvas"
 	"gotth/app/dashboard"
-	"gotth/app/db"
+	"gotth/app/lib"
 	"gotth/app/profile"
 	_ "github.com/a-h/templ"
 )
 
 func main() {
-	auth.Init()
+	lib.InitAuth()
 
 	dbPath := os.Getenv("SQLITE_DB_PATH")
 	if dbPath == "" {
 		dbPath = "./canvas.db"
 	}
-	db.Init(dbPath)
+	lib.InitDB(dbPath)
 
 	mux := http.NewServeMux()
 
@@ -42,34 +43,31 @@ func main() {
 	mux.Handle("GET /static/", http.StripPrefix("/static/", fileServer))
 
 	// Auth
-	mux.HandleFunc("POST /auth/login", auth.LoginHandler)
-	mux.HandleFunc("POST /auth/logout", auth.LogoutHandler)
-	mux.HandleFunc("GET /auth/user", auth.UserHandler)
+	mux.HandleFunc("POST /auth/login", lib.LoginHandler)
+	mux.HandleFunc("POST /auth/logout", lib.LogoutHandler)
+	mux.HandleFunc("GET /auth/user", lib.UserHandler)
 
-	// Landing (public) / Dashboard (auth required)
+	// Pages
 	mux.HandleFunc("GET /{$}", app.PageHandler)
-	mux.Handle("GET /drawings", auth.RequireAuth(dashboard.PageHandler))
-	mux.Handle("POST /draw/new", auth.RequireAuth(dashboard.NewHandler))
+	mux.Handle("GET /drawings", lib.RequireAuth(dashboard.PageHandler))
+	mux.Handle("POST /draw/new", lib.RequireAuth(dashboard.NewHandler))
+	mux.Handle("GET /draw/{id}", lib.RequireAuth(canvas.PageHandler))
+	mux.Handle("GET /profile", lib.RequireAuth(profile.PageHandler))
 
-	// Canvas editor
-	mux.Handle("GET /draw/{id}", auth.RequireAuth(canvas.PageHandler))
+	// API
+	mux.Handle("GET /api/draw/{id}/data", lib.RequireAuth(api.DataHandler))
+	mux.Handle("POST /api/draw/{id}/save", lib.RequireAuth(api.SaveHandler))
+	mux.Handle("POST /api/draw/{id}/share", lib.RequireAuth(api.ShareHandler))
+	mux.Handle("PUT /api/draw/{id}/rename", lib.RequireAuth(api.RenameHandler))
+	mux.Handle("POST /api/draw/{id}/thumbnail", lib.RequireAuth(api.ThumbnailHandler))
+	mux.Handle("DELETE /api/draw/{id}", lib.RequireAuth(api.DeleteHandler))
 
-	// Canvas data API
-	mux.Handle("GET /api/draw/{id}/data", auth.RequireAuth(canvas.DataHandler))
-	mux.Handle("POST /api/draw/{id}/save", auth.RequireAuth(canvas.SaveHandler))
-	mux.Handle("POST /api/draw/{id}/share", auth.RequireAuth(canvas.ShareHandler))
-	mux.Handle("PUT /api/draw/{id}/rename", auth.RequireAuth(canvas.RenameHandler))
-	mux.Handle("POST /api/draw/{id}/thumbnail", auth.RequireAuth(canvas.ThumbnailHandler))
-	mux.Handle("DELETE /api/draw/{id}", auth.RequireAuth(canvas.DeleteHandler))
-
-	// Shared (public read-only)
+	// Shared (public)
 	mux.HandleFunc("GET /shared/{slug}", canvas.SharedPageHandler)
-	mux.HandleFunc("GET /api/shared/{slug}/data", canvas.SharedDataHandler)
+	mux.HandleFunc("GET /api/shared/{slug}/data", api.SharedDataHandler)
 
-	// Profile
-	mux.Handle("GET /profile", auth.RequireAuth(profile.PageHandler))
-
-	wrapped := auth.Middleware(mux)
+	// Middleware
+	wrapped := lib.Middleware(mux)
 
 	port := os.Getenv("PORT")
 	if port == "" {

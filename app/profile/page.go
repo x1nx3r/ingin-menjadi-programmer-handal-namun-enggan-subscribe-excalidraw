@@ -5,8 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"gotth/app/auth"
-	"gotth/app/db"
+	"gotth/app/lib"
 )
 
 type DrawingItem struct {
@@ -24,20 +23,20 @@ func drawingLabel(n int) string {
 }
 
 func PageHandler(w http.ResponseWriter, r *http.Request) {
-	uid := auth.GetUserUID(r.Context())
+	uid := lib.GetUserUID(r.Context())
 	if uid == "" {
 		http.Redirect(w, r, "/", http.StatusFound)
 		return
 	}
 
-	user, err := auth.FirebaseAuth.GetUser(r.Context(), uid)
+	user, err := lib.FirebaseAuth.GetUser(r.Context(), uid)
 	if err != nil {
 		log.Printf("get user: %v", err)
 		http.Error(w, "user not found", http.StatusNotFound)
 		return
 	}
 
-	rows, err := db.DB.QueryContext(r.Context(),
+	rows, err := lib.DB.QueryContext(r.Context(),
 		"SELECT id, title, updated_at, COALESCE(thumbnail, '') FROM drawings WHERE owner_id = ? ORDER BY updated_at DESC", uid)
 	if err != nil {
 		log.Printf("list drawings: %v", err)
@@ -61,5 +60,5 @@ func PageHandler(w http.ResponseWriter, r *http.Request) {
 		name = user.Email
 	}
 
-	Page(name, user.PhotoURL, items).Render(r.Context(), w)
+	ProfilePage(name, user.PhotoURL, items).Render(r.Context(), w)
 }

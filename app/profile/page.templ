@@ -1,67 +1,33 @@
 package profile
 
 import (
+	"gotth/app"
 	"gotth/app/components"
 )
 
-templ Page(name string, photoURL string, drawings []DrawingItem) {
-	<!DOCTYPE html>
-	<html lang="en" class="h-full">
-		<head>
-			<meta charset="UTF-8"/>
-			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-			<title>{ name } — Profile</title>
-			<link rel="icon" type="image/svg+xml" href="/static/logo.svg"/>
-			<link rel="preconnect" href="https://fonts.googleapis.com"/>
-			<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"/>
-			<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;800;900&family=Inter:wght@400;500;600;700;800&family=Fira+Code:wght@400;700&display=swap" rel="stylesheet"/>
-			<link rel="stylesheet" href="/globals.css"/>
-			<script src="https://unpkg.com/htmx.org@2.0.4" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous"></script>
-			<script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-app-compat.js"></script>
-			<script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-auth-compat.js"></script>
-			<script>
-				firebase.initializeApp({
-					apiKey: "AIzaSyC4uHw6X_ugSXKqVEiio3y24LqTPTPD27w",
-					authDomain: "canvas-78802.firebaseapp.com",
-					projectId: "canvas-78802",
-					storageBucket: "canvas-78802.firebasestorage.app",
-					messagingSenderId: "384877248276",
-					appId: "1:384877248276:web:61d08dffd5f19d0f358c01",
-				});
-				(function() {
-					var t = localStorage.getItem('theme');
-					if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-						document.documentElement.classList.add('dark');
-					}
-				})();
-			</script>
-		</head>
-		<body hx-boost="true" hx-swap="innerHTML transition:true" class="min-h-full flex flex-col bg-[var(--bg)] text-[var(--fg)] antialiased">
-			@components.Navigation("/profile", false)
-			<main class="flex-1 mx-auto w-full max-w-4xl px-6 py-12">
-				<div class="flex items-center gap-6 mb-12">
-					if photoURL != "" {
-						<img src={ photoURL } alt="" class="h-16 w-16 border-2 border-[var(--border)] object-cover"/>
-					}
-					<div>
-						<h1 class="text-2xl font-black uppercase tracking-tight">{ name }</h1>
-						<p class="text-xs font-bold uppercase tracking-wider text-[var(--fg-muted)] mt-1">{ len(drawings) } { drawingLabel(len(drawings)) }</p>
+templ ProfilePage(name string, photoURL string, drawings []DrawingItem) {
+	@app.Layout(name+" — Udin's Canvas", "/profile") {
+		<main class="flex-1 mx-auto w-full max-w-4xl px-6 py-12">
+			<div class="flex items-center gap-6 mb-12">
+				if photoURL != "" {
+					<img src={ photoURL } alt="" class="h-16 w-16 border-2 border-[var(--border)] object-cover"/>
+				}
+				<div>
+					<h1 class="text-2xl font-black uppercase tracking-tight">{ name }</h1>
+					<p class="text-xs font-bold uppercase tracking-wider text-[var(--fg-muted)] mt-1">{ len(drawings) } { drawingLabel(len(drawings)) }</p>
+				</div>
+			</div>
+			<div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+				for _, d := range drawings {
+					@components.DrawingCard(d.ID, d.Title, d.UpdatedAt, d.Thumbnail)
+				}
+				if len(drawings) == 0 {
+					<div class="col-span-full text-center py-16">
+						<p class="text-sm font-bold uppercase tracking-wider text-[var(--fg-muted)]">No drawings yet</p>
+						<a href="/drawings" class="mt-4 inline-block px-4 py-2 border-2 border-[var(--border)] text-xs font-bold uppercase tracking-wider hover:bg-[var(--bg-subtle)] transition-all">Go to dashboard</a>
 					</div>
-				</div>
-
-				<div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-					for _, d := range drawings {
-						@components.DrawingCard(d.ID, d.Title, d.UpdatedAt, d.Thumbnail)
-					}
-					if len(drawings) == 0 {
-						<div class="col-span-full text-center py-16">
-							<p class="text-sm font-bold uppercase tracking-wider text-[var(--fg-muted)]">No drawings yet</p>
-							<a href="/drawings" class="mt-4 inline-block px-4 py-2 border-2 border-[var(--border)] text-xs font-bold uppercase tracking-wider hover:bg-[var(--bg-subtle)] transition-all">Go to dashboard</a>
-						</div>
-					}
-				</div>
-			</main>
-			@components.Footer()
-		</body>
-	</html>
+				}
+			</div>
+		</main>
+	}
 }

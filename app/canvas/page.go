@@ -4,12 +4,11 @@ import (
 	"log"
 	"net/http"
 
-	"gotth/app/auth"
-	"gotth/app/db"
+	"gotth/app/lib"
 )
 
 func PageHandler(w http.ResponseWriter, r *http.Request) {
-	uid := auth.GetUserUID(r.Context())
+	uid := lib.GetUserUID(r.Context())
 	if uid == "" {
 		http.Redirect(w, r, "/", http.StatusFound)
 		return
@@ -18,7 +17,7 @@ func PageHandler(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
 	var ownerId, title string
-	err := db.DB.QueryRowContext(r.Context(), "SELECT owner_id, title FROM drawings WHERE id = ?", id).Scan(&ownerId, &title)
+	err := lib.DB.QueryRowContext(r.Context(), "SELECT owner_id, title FROM drawings WHERE id = ?", id).Scan(&ownerId, &title)
 	if err != nil {
 		log.Printf("load drawing %s: %v", id, err)
 		http.NotFound(w, r)

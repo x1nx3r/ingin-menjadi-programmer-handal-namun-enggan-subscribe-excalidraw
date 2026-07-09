@@ -1,69 +1,36 @@
 package dashboard
 
-import "gotth/app/components"
+import (
+	"gotth/app"
+	"gotth/app/components"
+)
 
 templ DashboardPage(drawings []Drawing) {
-	<!DOCTYPE html>
-	<html lang="en" class="h-full">
-		<head>
-			<meta charset="UTF-8"/>
-			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-			<title>Your Drawings — Udin's Canvas</title>
-			<link rel="icon" type="image/svg+xml" href="/static/logo.svg"/>
-			<link rel="preconnect" href="https://fonts.googleapis.com"/>
-			<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"/>
-			<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fira+Code:wght@400;700&display=swap" rel="stylesheet"/>
-			<link rel="stylesheet" href="/globals.css"/>
-			<script src="https://unpkg.com/htmx.org@2.0.4" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous"></script>
-			<script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-app-compat.js"></script>
-			<script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-auth-compat.js"></script>
-			<script>
-				firebase.initializeApp({
-					apiKey: "AIzaSyC4uHw6X_ugSXKqVEiio3y24LqTPTPD27w",
-					authDomain: "canvas-78802.firebaseapp.com",
-					projectId: "canvas-78802",
-					storageBucket: "canvas-78802.firebasestorage.app",
-					messagingSenderId: "384877248276",
-					appId: "1:384877248276:web:61d08dffd5f19d0f358c01",
-				});
-				(function() {
-					var t = localStorage.getItem('theme');
-					if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-						document.documentElement.classList.add('dark');
-					}
-				})();
-			</script>
-		</head>
-		<body hx-boost="true" hx-swap="innerHTML transition:true" class="min-h-full flex flex-col bg-[var(--bg)] text-[var(--fg)] antialiased">
-			@components.Navigation("/drawings", false)
-			<div class="flex flex-col flex-1">
-				<div class="mx-auto max-w-5xl px-6 py-16 lg:px-8 w-full">
-					<div class="flex items-center justify-between mb-12">
-						<div>
-							<h1 class="text-4xl font-black text-[var(--fg)] tracking-tight">Your Drawings</h1>
-							<p class="mt-2 text-xs font-bold text-[var(--fg-muted)] uppercase tracking-wider">Create, edit, and share your Excalidraw canvases.</p>
-						</div>
-						<form action="/draw/new" method="POST" hx-boost="false">
-							<button
-								type="submit"
-								class="inline-flex h-10 items-center border-2 border-[var(--border)] bg-[var(--fg)] px-6 text-xs font-bold uppercase tracking-wider text-[var(--bg)] transition-all hover:bg-[var(--bg-subtle)] hover:text-[var(--fg)] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none shadow-[4px_4px_0px_0px_var(--border)]"
-							>
-								New Drawing
-							</button>
-						</form>
-					</div>
-					<div id="drawing-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-						if len(drawings) == 0 {
-							@components.EmptyState()
-						} else {
-							for _, d := range drawings {
-								@components.DrawingCard(d.ID, d.Title, d.UpdatedAt, d.Thumbnail)
-							}
-						}
-					</div>
+	@app.Layout("Your Drawings — Udin's Canvas", "/drawings") {
+		<div class="mx-auto max-w-5xl px-6 py-16 lg:px-8 w-full">
+			<div class="flex items-center justify-between mb-12">
+				<div>
+					<h1 class="text-4xl font-black text-[var(--fg)] tracking-tight">Your Drawings</h1>
+					<p class="mt-2 text-xs font-bold text-[var(--fg-muted)] uppercase tracking-wider">Create, edit, and share your Excalidraw canvases.</p>
 				</div>
+				<form action="/draw/new" method="POST" hx-boost="false">
+					<button
+						type="submit"
+						class="inline-flex h-10 items-center border-2 border-[var(--border)] bg-[var(--fg)] px-6 text-xs font-bold uppercase tracking-wider text-[var(--bg)] transition-all hover:bg-[var(--bg-subtle)] hover:text-[var(--fg)] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none shadow-[4px_4px_0px_0px_var(--border)]"
+					>
+						New Drawing
+					</button>
+				</form>
 			</div>
-			@components.Footer()
-		</body>
-	</html>
+			<div id="drawing-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+				if len(drawings) == 0 {
+					@components.EmptyState()
+				} else {
+					for _, d := range drawings {
+						@components.DrawingCard(d.ID, d.Title, d.UpdatedAt, d.Thumbnail)
+					}
+				}
+			</div>
+		</div>
+	}
 }

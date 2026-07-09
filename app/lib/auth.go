@@ -1,4 +1,4 @@
-package auth
+package lib
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 
 var FirebaseAuth *auth.Client
 
-func Init() {
+func InitAuth() {
 	ctx := context.Background()
 	opt := option.WithCredentialsFile(serviceAccountPath())
 

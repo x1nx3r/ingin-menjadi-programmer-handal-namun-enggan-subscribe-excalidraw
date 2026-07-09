@@ -1,4 +1,4 @@
-package db
+package lib
 
 import (
 	"database/sql"
@@ -9,7 +9,7 @@ import (
 
 var DB *sql.DB
 
-func Init(dbPath string) {
+func InitDB(dbPath string) {
 	var err error
 	DB, err = sql.Open("sqlite3", dbPath+"?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=on")
 	if err != nil {

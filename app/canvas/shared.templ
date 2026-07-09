@@ -1,74 +1,53 @@
 package canvas
 
+import "gotth/app"
+
 templ SharedPage(title string, slug string) {
-	<!DOCTYPE html>
-	<html lang="en" class="h-full">
-		<head>
-			<meta charset="UTF-8"/>
-			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-			<title>{ title } — Shared · Udin's Canvas</title>
-			<link rel="icon" type="image/svg+xml" href="/static/logo.svg"/>
-			<link rel="preconnect" href="https://fonts.googleapis.com"/>
-			<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"/>
-			<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fira+Code:wght@400;700&display=swap" rel="stylesheet"/>
-			<link rel="stylesheet" href="/globals.css"/>
-			<link rel="stylesheet" href="/static/excalidraw.css"/>
-			<link rel="stylesheet" href="/static/excalidraw-brutalist.css"/>
-			<script>
-				(function() {
-					var t = localStorage.getItem('theme');
-					if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-						document.documentElement.classList.add('dark');
+	@app.CanvasLayout(title) {
+		<style>
+			html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
+			#canvas-mount { width: 100vw; height: calc(100vh - 56px); min-height: 200px; }
+		</style>
+		<header class="sticky top-0 z-50 w-full border-b-2 border-[var(--border)] bg-[var(--bg)]/95">
+			<div class="mx-auto flex h-14 max-w-7xl items-center justify-between px-6 lg:px-8">
+				<a href="/" class="flex items-center gap-2.5 font-black tracking-tight text-[var(--fg)] select-none group">
+					<div class="h-8 w-8 border-2 border-[var(--border)] p-1 flex items-center justify-center shadow-[2px_2px_0px_0px_var(--border)] transition-all group-active:translate-x-0.5 group-active:translate-y-0.5 group-active:shadow-none">
+						<svg viewBox="0 0 32 32" fill="none" class="h-full w-full text-[var(--fg)]">
+							<rect x="2" y="2" width="28" height="28" stroke="currentColor" stroke-width="2.5"/>
+							<path d="M8 24 L24 8" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"/>
+							<rect x="6" y="20" width="6" height="6" fill="currentColor"/>
+						</svg>
+					</div>
+					<span class="text-sm font-black uppercase tracking-[0.15em]">Udin's Canvas</span>
+				</a>
+				<span class="text-xs font-bold uppercase tracking-wider text-[var(--fg-muted)]">Read-only view</span>
+			</div>
+		</header>
+		<div id="canvas-mount" data-slug={ slug }></div>
+		<script src="/static/excalidraw.bundle.js"></script>
+		<script>
+			(function() {
+				var slug = document.getElementById('canvas-mount').dataset.slug;
+				var mount = document.getElementById('canvas-mount');
+				var React = window.ExcalidrawBundle.React;
+				var ReactDOM = window.ExcalidrawBundle.ReactDOM;
+				var Excalidraw = window.ExcalidrawBundle.Excalidraw;
+				var root = ReactDOM.createRoot(mount);
+				root.render(React.createElement(Excalidraw, {
+					viewModeEnabled: true,
+					theme: document.documentElement.classList.contains('dark') ? 'dark' : 'light',
+					excalidrawAPI: function(api) {
+						fetch('/api/shared/' + slug + '/data')
+							.then(function(r) { return r.json(); })
+							.then(function(data) {
+								if (data && data.elements) {
+									api.updateScene({ elements: data.elements, appState: data.appState });
+								}
+							})
+							.catch(function(e) { console.error('Load error:', e); });
 					}
-				})();
-			</script>
-			<style>
-				html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
-				#canvas-mount { width: 100vw; height: calc(100vh - 56px); min-height: 200px; }
-			</style>
-		</head>
-		<body class="h-full bg-[var(--bg)] text-[var(--fg)] antialiased">
-			<header class="sticky top-0 z-50 w-full border-b-2 border-[var(--border)] bg-[var(--bg)]/95">
-				<div class="mx-auto flex h-14 max-w-7xl items-center justify-between px-6 lg:px-8">
-					<a href="/" class="flex items-center gap-2.5 font-black tracking-tight text-[var(--fg)] select-none group">
-						<div class="h-8 w-8 border-2 border-[var(--border)] p-1 flex items-center justify-center shadow-[2px_2px_0px_0px_var(--border)] transition-all group-active:translate-x-0.5 group-active:translate-y-0.5 group-active:shadow-none">
-							<svg viewBox="0 0 32 32" fill="none" class="h-full w-full text-[var(--fg)]">
-								<rect x="2" y="2" width="28" height="28" stroke="currentColor" stroke-width="2.5"/>
-								<path d="M8 24 L24 8" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"/>
-								<rect x="6" y="20" width="6" height="6" fill="currentColor"/>
-							</svg>
-						</div>
-						<span class="text-sm font-black uppercase tracking-[0.15em]">Udin's Canvas</span>
-					</a>
-					<span class="text-xs font-bold uppercase tracking-wider text-[var(--fg-muted)]">Read-only view</span>
-				</div>
-			</header>
-			<div id="canvas-mount" data-slug={ slug }></div>
-			<script src="/static/excalidraw.bundle.js"></script>
-			<script>
-				(function() {
-					var slug = document.getElementById('canvas-mount').dataset.slug;
-					var mount = document.getElementById('canvas-mount');
-					var React = window.ExcalidrawBundle.React;
-					var ReactDOM = window.ExcalidrawBundle.ReactDOM;
-					var Excalidraw = window.ExcalidrawBundle.Excalidraw;
-					var root = ReactDOM.createRoot(mount);
-					root.render(React.createElement(Excalidraw, {
-						viewModeEnabled: true,
-						theme: document.documentElement.classList.contains('dark') ? 'dark' : 'light',
-						excalidrawAPI: function(api) {
-							fetch('/api/shared/' + slug + '/data')
-								.then(function(r) { return r.json(); })
-								.then(function(data) {
-									if (data && data.elements) {
-										api.updateScene({ elements: data.elements, appState: data.appState });
-									}
-								})
-								.catch(function(e) { console.error('Load error:', e); });
-						}
-					}));
-				})();
-			</script>
-		</body>
-	</html>
+				}));
+			})();
+		</script>
+	}
 }
