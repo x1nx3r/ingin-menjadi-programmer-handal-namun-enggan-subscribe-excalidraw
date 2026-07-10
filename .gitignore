@@ -38,3 +38,4 @@ canvas.db-wal
 app/assets/excalidraw/node_modules/
 profiles*/
 cookie.txt
+load_tests/
