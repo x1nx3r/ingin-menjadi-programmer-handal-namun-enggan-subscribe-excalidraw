@@ -24,6 +24,17 @@
   --teal:      #179299;
   --lavender:  #7287fd;
   --radius:    0px;
+
+  /* Brutalist offset shadows */
+  --shadow-sm:        2px 2px 0px 0px var(--border);
+  --shadow-md:        4px 4px 0px 0px var(--border);
+  --shadow-lg:        6px 6px 0px 0px var(--border);
+  --shadow-accent-sm: 2px 2px 0px 0px var(--accent);
+  --shadow-accent-md: 4px 4px 0px 0px var(--accent);
+  --shadow-accent-lg: 6px 6px 0px 0px var(--accent);
+  --shadow-mauve-md:  4px 4px 0px 0px var(--mauve);
+  --shadow-mauve-lg:  6px 6px 0px 0px var(--mauve);
+  --shadow-mauve-xl:  8px 8px 0px 0px var(--mauve);
 }
 
 .dark {
@@ -91,6 +102,97 @@ h1, h2, h3, h4, h5, h6 {
   font-weight: 400;
   line-height: 1.1;
   text-transform: uppercase;
+}
+
+/* ─── Component Classes ──────────────────────────── */
+@layer components {
+  /* btn: shared base — pair with btn-primary or btn-ghost */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border: 2px solid;
+    font-family: 'Space Mono', monospace;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+    text-decoration: none;
+    line-height: 1;
+  }
+  .btn:active {
+    transform: translate(2px, 2px);
+    box-shadow: none;
+  }
+
+  /* btn-primary: filled accent, brutalist shadow, hover → mauve */
+  .btn-primary {
+    border-color: var(--accent);
+    background-color: var(--accent);
+    color: var(--accent-fg);
+    box-shadow: var(--shadow-accent-sm);
+  }
+  .btn-primary:hover {
+    background-color: var(--mauve);
+    border-color: var(--mauve);
+    box-shadow: var(--shadow-mauve-md);
+  }
+
+  /* btn-ghost: transparent, border only */
+  .btn-ghost {
+    border-color: var(--border);
+    background-color: transparent;
+    color: var(--fg);
+    box-shadow: var(--shadow-sm);
+  }
+  .btn-ghost:hover {
+    background-color: var(--bg-subtle);
+  }
+
+  /* btn-icon: self-contained 32px square for icon-only buttons */
+  .btn-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border: 2px solid var(--border);
+    background-color: var(--bg);
+    color: var(--fg);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    box-shadow: var(--shadow-sm);
+  }
+  .btn-icon:hover  { background-color: var(--bg-subtle); }
+  .btn-icon:active {
+    transform: translate(2px, 2px);
+    box-shadow: none;
+  }
+
+  /* card: brutalist panel with hover lift to accent shadow */
+  .card {
+    border: 2px solid var(--border);
+    background-color: var(--bg);
+    box-shadow: var(--shadow-md);
+    transition: all 0.15s ease;
+  }
+  .card:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: var(--shadow-accent-lg);
+  }
+
+  /* badge: inline label/tag */
+  .badge {
+    display: inline-flex;
+    border: 2px solid;
+    font-family: 'Space Mono', monospace;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
 }
 
 /* ─── Custom Animations ──────────────────────────── */
@@ -169,7 +271,6 @@ h1, h2, h3, h4, h5, h6 {
   padding: 1.25rem 1.5rem;
   overflow-x: auto;
   margin: 1.5rem 0;
-  shadow: none;
   box-shadow: 4px 4px 0px 0px var(--border);
 }
 

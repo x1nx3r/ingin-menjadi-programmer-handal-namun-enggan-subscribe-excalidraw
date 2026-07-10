@@ -49,7 +49,7 @@ templ navHeader(currentPath string) {
 				<button
 					id="theme-toggle"
 					onclick="toggleTheme()"
-					class="flex h-8 w-8 items-center justify-center border-2 border-[var(--border)] bg-[var(--bg)] text-[var(--fg)] hover:bg-[var(--bg-subtle)] cursor-pointer transition-all active:translate-x-0.5 active:translate-y-0.5 active:shadow-none shadow-[2px_2px_0px_0px_var(--border)]"
+					class="btn-icon"
 					aria-label="Toggle dark mode"
 				>
 					<svg class="hidden dark:block h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
@@ -64,7 +64,7 @@ templ navHeader(currentPath string) {
 			<button
 				type="button"
 				onclick="toggleMobileMenu()"
-				class="inline-flex items-center justify-center md:hidden h-8 w-8 border-2 border-[var(--border)] bg-[var(--bg)] text-[var(--fg)] hover:bg-[var(--bg-subtle)] cursor-pointer transition-all active:translate-x-0.5 active:translate-y-0.5 active:shadow-none shadow-[2px_2px_0px_0px_var(--border)]"
+				class="btn-icon md:hidden"
 				aria-label="Toggle menu"
 			>
 				<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
@@ -80,7 +80,7 @@ templ navHeader(currentPath string) {
 				<button
 					type="button"
 					onclick="toggleTheme()"
-					class="flex h-10 items-center justify-center gap-2 border-2 border-[var(--border)] bg-[var(--bg)] text-[var(--fg)] hover:bg-[var(--bg-subtle)] cursor-pointer transition-all active:translate-x-0.5 active:translate-y-0.5 active:shadow-none shadow-[2px_2px_0px_0px_var(--border)] px-3 text-xs font-bold uppercase tracking-wider"
+					class="btn btn-ghost w-full h-10 px-3 text-xs"
 					aria-label="Toggle dark mode"
 				>
 					<svg class="hidden dark:block h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">

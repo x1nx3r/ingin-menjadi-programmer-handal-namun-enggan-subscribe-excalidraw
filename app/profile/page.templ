@@ -24,7 +24,7 @@ templ ProfilePage(name string, photoURL string, drawings []DrawingItem) {
 				if len(drawings) == 0 {
 					<div class="col-span-full text-center py-10 sm:py-16">
 						<p class="text-xs sm:text-sm font-bold uppercase tracking-wider text-[var(--fg-muted)]">No drawings yet</p>
-						<a href="/drawings" class="mt-4 inline-block px-4 py-2 border-2 border-[var(--border)] text-xs font-bold uppercase tracking-wider hover:bg-[var(--bg-subtle)] transition-all">Go to dashboard</a>
+						<a href="/drawings" class="btn btn-ghost mt-4 px-4 py-2 text-xs">Go to dashboard</a>
 					</div>
 				}
 			</div>

@@ -70,7 +70,7 @@ templ LandingPage() {
 					<div class="mt-8 sm:mt-10 flex flex-col items-center justify-center gap-3 sm:gap-4 sm:flex-row">
 						<button
 							onclick="signInWithGoogle()"
-							class="inline-flex h-11 sm:h-12 items-center gap-2 border-2 border-[var(--accent)] bg-[var(--accent)] px-6 sm:px-8 text-xs sm:text-sm font-bold uppercase tracking-wider text-[var(--accent-fg)] shadow-[4px_4px_0px_0px_var(--accent)] transition-all hover:bg-[var(--mauve)] hover:shadow-[6px_6px_0px_0px_var(--mauve)] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none"
+							class="btn btn-primary h-11 sm:h-12 px-6 sm:px-8 text-xs sm:text-sm hover:shadow-[6px_6px_0px_0px_var(--mauve)]"
 						>
 							Draw Something
 							<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
@@ -79,7 +79,7 @@ templ LandingPage() {
 						</button>
 						<a
 							href="#features"
-							class="inline-flex h-11 sm:h-12 items-center gap-2 border-2 border-[var(--border)] px-6 sm:px-8 text-xs sm:text-sm font-bold uppercase tracking-wider text-[var(--fg)] transition-all hover:bg-[var(--bg-subtle)] hover:shadow-[2px_2px_0px_0px_var(--border)] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none"
+							class="btn btn-ghost h-11 sm:h-12 px-6 sm:px-8 text-xs sm:text-sm"
 						>
 							See What's Inside
 						</a>
@@ -139,12 +139,12 @@ templ LandingPage() {
 					<p class="mt-2 text-2xl sm:text-3xl font-black uppercase tracking-tighter">GOTTH. No node_modules.</p>
 				</div>
 				<div class="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
-					<span class="border-2 border-[var(--accent)] bg-[var(--accent)] px-3 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-xs font-black uppercase tracking-wider text-[var(--accent-fg)] shadow-[2px_2px_0px_0px_var(--accent)]">Go</span>
-					<span class="border-2 border-[var(--blue)] bg-[var(--blue)] px-3 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-xs font-black uppercase tracking-wider text-[var(--accent-fg)] shadow-[2px_2px_0px_0px_var(--blue)]">Templ</span>
-					<span class="border-2 border-[var(--teal)] bg-[var(--teal)] px-3 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-xs font-black uppercase tracking-wider text-[var(--accent-fg)] shadow-[2px_2px_0px_0px_var(--teal)]">HTMX</span>
-					<span class="border-2 border-[var(--pink)] bg-[var(--pink)] px-3 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-xs font-black uppercase tracking-wider text-[var(--accent-fg)] shadow-[2px_2px_0px_0px_var(--pink)]">Tailwind</span>
-					<span class="border-2 border-[var(--mauve)] bg-[var(--mauve)] px-3 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-xs font-black uppercase tracking-wider text-[var(--accent-fg)] shadow-[2px_2px_0px_0px_var(--mauve)]">SQLite</span>
-					<span class="border-2 border-[var(--lavender)] bg-[var(--lavender)] px-3 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-xs font-black uppercase tracking-wider text-[var(--accent-fg)] shadow-[2px_2px_0px_0px_var(--lavender)]">Excalidraw</span>
+					<span class="badge border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-fg)] shadow-[2px_2px_0px_0px_var(--accent)] px-3 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-xs">Go</span>
+					<span class="badge border-[var(--blue)] bg-[var(--blue)] text-[var(--accent-fg)] shadow-[2px_2px_0px_0px_var(--blue)] px-3 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-xs">Templ</span>
+					<span class="badge border-[var(--teal)] bg-[var(--teal)] text-[var(--accent-fg)] shadow-[2px_2px_0px_0px_var(--teal)] px-3 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-xs">HTMX</span>
+					<span class="badge border-[var(--pink)] bg-[var(--pink)] text-[var(--accent-fg)] shadow-[2px_2px_0px_0px_var(--pink)] px-3 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-xs">Tailwind</span>
+					<span class="badge border-[var(--mauve)] bg-[var(--mauve)] text-[var(--accent-fg)] shadow-[2px_2px_0px_0px_var(--mauve)] px-3 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-xs">SQLite</span>
+					<span class="badge border-[var(--lavender)] bg-[var(--lavender)] text-[var(--accent-fg)] shadow-[2px_2px_0px_0px_var(--lavender)] px-3 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-xs">Excalidraw</span>
 				</div>
 				<p class="mt-6 sm:mt-8 text-center text-[10px] sm:text-xs font-medium text-[var(--fg-muted)]">
 					Compiles to a single binary. Deploys with <code class="border-2 border-[var(--border)] bg-[var(--bg-subtle)] px-1.5 py-0.5 text-[var(--fg)] font-bold">scp</code>. Uses 16MB of RAM. That's less than your browser tabs.
@@ -166,7 +166,7 @@ templ LandingPage() {
 				</p>
 				<button
 					onclick="signInWithGoogle()"
-					class="mt-6 sm:mt-8 inline-flex h-12 sm:h-14 items-center gap-2 border-2 border-[var(--accent)] bg-[var(--accent)] px-8 sm:px-10 text-sm sm:text-base font-bold uppercase tracking-wider text-[var(--accent-fg)] shadow-[6px_6px_0px_0px_var(--accent)] transition-all hover:bg-[var(--mauve)] hover:shadow-[8px_8px_0px_0px_var(--mauve)] active:translate-x-0.5 active:translate-y-0.5 active:shadow-none"
+					class="btn btn-primary mt-6 sm:mt-8 h-12 sm:h-14 px-8 sm:px-10 text-sm sm:text-base shadow-[6px_6px_0px_0px_var(--accent)] hover:shadow-[8px_8px_0px_0px_var(--mauve)]"
 				>
 					Draw Something
 					<svg class="h-4 w-4 sm:h-5 sm:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
