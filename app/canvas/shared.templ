@@ -113,34 +113,23 @@ templ SharedPage(title string, slug string, allowPublicEdits bool) {
 				}
 				var _username = sessionStorage.getItem('collab_username') || null;
 
-				// Game Loop Architecture
-				var _lastBroadcastHash = '';
-				var _lastNetworkHash = '';
-				var _networkLockTime = 0;
+				var _lastNetworkVersion = 0;
 
-				function getHash(elements) {
-					if (!elements || !elements.length) return '';
-					return elements.map(function(el) {
-						return el.id + ':' + el.version;
-					}).sort().join(',');
-				}
-
-				// Fixed 20fps tick for network syncing
-				setInterval(function() {
-					if (!_api || !_ws || _ws.readyState !== WebSocket.OPEN || !_username) return;
-					if (Date.now() - _networkLockTime < 100) return;
-
-					var elements = _api.getSceneElements();
-					var currentHash = getHash(elements);
-
-					if (currentHash === _lastBroadcastHash || currentHash === _lastNetworkHash) {
-						return; // No local changes
+				var _pendingBroadcast = null;
+				var _broadcastScheduled = false;
+				function scheduleBroadcast(elements) {
+					_pendingBroadcast = elements;
+					if (!_broadcastScheduled) {
+						_broadcastScheduled = true;
+						requestAnimationFrame(function() {
+							_broadcastScheduled = false;
+							if (_pendingBroadcast && _ws && _ws.readyState === WebSocket.OPEN && _username) {
+								_ws.send(JSON.stringify({ type: 'update', elements: _pendingBroadcast }));
+							}
+							_pendingBroadcast = null;
+						});
 					}
-
-					// Genuine physical local change — broadcast it
-					_lastBroadcastHash = currentHash;
-					_ws.send(JSON.stringify({ type: 'update', elements: elements }));
-				}, 50);
+				}
 
 				// WebSocket with randomized backoff reconnect (thundering herd protection).
 				var _ws = null;
@@ -151,33 +140,8 @@ templ SharedPage(title string, slug string, allowPublicEdits bool) {
 						try {
 							var payload = JSON.parse(event.data);
 							if (payload.type === 'update' && _api && payload.elements) {
-								_lastNetworkHash = getHash(payload.elements);
-								_networkLockTime = Date.now();
-								
-								// Protect active local elements from being overwritten by remote normalization
-								var appState = _api.getAppState();
-								var activeIds = {};
-								if (appState.draggingElement) activeIds[appState.draggingElement.id] = true;
-								if (appState.editingElement) activeIds[appState.editingElement.id] = true;
-								if (appState.resizingElement) activeIds[appState.resizingElement.id] = true;
-								if (appState.multiElement) activeIds[appState.multiElement.id] = true;
-								if (appState.selectedElementIds) {
-									for (var k in appState.selectedElementIds) {
-										if (appState.selectedElementIds[k]) activeIds[k] = true;
-									}
-								}
-
-								var safeElements = payload.elements;
-								if (Object.keys(activeIds).length > 0) {
-									safeElements = [];
-									for (var i = 0; i < payload.elements.length; i++) {
-										if (!activeIds[payload.elements[i].id]) {
-											safeElements.push(payload.elements[i]);
-										}
-									}
-								}
-
-								_api.updateScene({ elements: safeElements });
+								_lastNetworkVersion = window.ExcalidrawBundle.getSceneVersion(payload.elements);
+								_api.updateScene({ elements: payload.elements });
 							} else if (payload.type === 'pointer' && payload.clientId && payload.clientId !== _clientId) {
 								_collaborators.set(payload.clientId, {
 									pointer: payload.pointer,
@@ -243,7 +207,12 @@ templ SharedPage(title string, slug string, allowPublicEdits bool) {
 
 				if (allowPublicEdits) {
 					excalidrawProps.onChange = function(elements, appState) {
-						// Only used to trigger autosave in page.templ; shared.templ relies on owner
+						var currentVersion = window.ExcalidrawBundle.getSceneVersion(elements);
+						if (currentVersion === _lastNetworkVersion) {
+							return; // Network echo — drop silently
+						}
+						
+						scheduleBroadcast(elements);
 					};
 
 					excalidrawProps.onPointerUpdate = function(payload) {
