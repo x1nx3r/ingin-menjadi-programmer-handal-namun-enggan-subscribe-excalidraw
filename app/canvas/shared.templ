@@ -5,35 +5,124 @@ import (
 	"gotth/app/components"
 )
 
-templ SharedPage(title string, slug string) {
+templ SharedPage(title string, slug string, allowPublicEdits bool) {
 	@app.CanvasLayout(title) {
 		<style>
 			html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
 			#canvas-mount { width: 100%; height: calc(100vh - 56px); min-height: 200px; }
+			#name-prompt {
+				position: fixed; inset: 0; z-index: 9999;
+				display: flex; align-items: center; justify-content: center;
+				background: rgba(0,0,0,0.6);
+			}
+			#name-prompt.hidden { display: none; }
+			.name-card {
+				border: 2px solid var(--border);
+				background: var(--bg);
+				padding: 2rem;
+				box-shadow: 4px 4px 0px 0px var(--border);
+				width: 100%;
+				max-width: 380px;
+				margin: 0 1rem;
+			}
+			.name-card h2 {
+				font-size: 0.875rem;
+				font-weight: 700;
+				text-transform: uppercase;
+				letter-spacing: 0.1em;
+				margin: 0 0 0.25rem;
+			}
+			.name-card p {
+				font-size: 0.75rem;
+				color: var(--fg-muted);
+				margin: 0 0 1rem;
+			}
+			.name-card input {
+				width: 100%;
+				border: 2px solid var(--border);
+				background: var(--bg-subtle);
+				color: var(--fg);
+				padding: 0.5rem 0.75rem;
+				font-family: inherit;
+				font-size: 0.875rem;
+				margin-bottom: 0.75rem;
+				box-sizing: border-box;
+				outline: none;
+			}
+			.name-card input:focus { border-color: var(--accent); }
+			.name-card button {
+				width: 100%;
+				padding: 0.5rem;
+				font-size: 0.75rem;
+				font-weight: 700;
+				text-transform: uppercase;
+				letter-spacing: 0.1em;
+				cursor: pointer;
+				border: 2px solid var(--border);
+				background: var(--fg);
+				color: var(--bg);
+			}
+			.name-card button:hover { opacity: 0.85; }
 		</style>
 		<header class="sticky top-0 z-50 w-full border-b-2 border-[var(--border)] bg-[var(--bg)]/95">
 			<div class="mx-auto flex h-14 max-w-7xl items-center justify-between px-3 sm:px-6 lg:px-8">
 				<div class="hidden sm:block">
 					@components.Logo()
 				</div>
-				<span class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-[var(--fg-muted)]">Read-only view</span>
+				if allowPublicEdits {
+					<span class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-[var(--accent)]">Live Collaboration</span>
+				} else {
+					<span class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-[var(--fg-muted)]">Read-only view</span>
+				}
 			</div>
 		</header>
-		<div id="canvas-mount" data-slug={ slug }></div>
+		if allowPublicEdits {
+			<div id="name-prompt">
+				<div class="name-card">
+					<h2>Join Session</h2>
+					<p>Enter your name so others know who's drawing.</p>
+					<input id="username-input" type="text" placeholder="Your name" maxlength="32" autocomplete="off"/>
+					<button onclick="joinSession()">Join →</button>
+				</div>
+			</div>
+		}
+		<div
+			id="canvas-mount"
+			data-slug={ slug }
+			if allowPublicEdits {
+				data-allow-public-edits="true"
+			} else {
+				data-allow-public-edits="false"
+			}
+		></div>
 		<script src="/static/excalidraw.bundle.js"></script>
 		<script>
 			(function() {
-				var slug = document.getElementById('canvas-mount').dataset.slug;
 				var mount = document.getElementById('canvas-mount');
-				var React = window.ExcalidrawBundle.React;
-				var ReactDOM = window.ExcalidrawBundle.ReactDOM;
-				var Excalidraw = window.ExcalidrawBundle.Excalidraw;
+				var slug = mount.dataset.slug;
+				var allowPublicEdits = mount.dataset.allowPublicEdits === 'true';
 
-				// Hoisted so the WS handler can reach it before Excalidraw finishes mounting.
 				var _api = null;
+				var _wsElements = null;
+				var _networkFingerprint = null;
+				var _collaborators = new Map();
 
-				// WebSocket — passive receiver (live presentation mode).
-				// Reconnects with randomized backoff to prevent thundering herd on server restart.
+				// Identity: persisted across page reloads within the same browser session.
+				var _clientId = sessionStorage.getItem('collab_client_id');
+				if (!_clientId) {
+					_clientId = (Date.now().toString(36) + Math.random().toString(36).slice(2));
+					sessionStorage.setItem('collab_client_id', _clientId);
+				}
+				var _username = sessionStorage.getItem('collab_username') || null;
+
+				function buildFingerprint(elements) {
+					if (!elements || !elements.length) return '';
+					return elements.map(function(el) {
+						return el.id + ':' + el.versionNonce;
+					}).sort().join(',');
+				}
+
+				// WebSocket with randomized backoff reconnect (thundering herd protection).
 				var _ws = null;
 				function connectWS() {
 					var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -42,7 +131,15 @@ templ SharedPage(title string, slug string) {
 						try {
 							var payload = JSON.parse(event.data);
 							if (payload.type === 'update' && _api && payload.elements) {
+								_wsElements = payload.elements;
+								_networkFingerprint = buildFingerprint(payload.elements);
 								_api.updateScene({ elements: payload.elements });
+							} else if (payload.type === 'pointer' && payload.clientId && payload.clientId !== _clientId) {
+								_collaborators.set(payload.clientId, {
+									pointer: payload.pointer,
+									username: payload.username || 'Guest'
+								});
+								if (_api) { _api.updateScene({ collaborators: new Map(_collaborators) }); }
 							}
 						} catch(e) {}
 					};
@@ -53,9 +150,38 @@ templ SharedPage(title string, slug string) {
 				}
 				connectWS();
 
-				var root = ReactDOM.createRoot(mount);
-				root.render(React.createElement(Excalidraw, {
-					viewModeEnabled: true,
+				// --- Name Prompt (active mode only) ---
+				window.joinSession = function() {
+					var input = document.getElementById('username-input');
+					var name = (input ? input.value : '').trim();
+					if (!name) { if (input) input.focus(); return; }
+					_username = name;
+					sessionStorage.setItem('collab_username', name);
+					var prompt = document.getElementById('name-prompt');
+					if (prompt) { prompt.classList.add('hidden'); }
+				};
+
+				// If we already have a name stored, dismiss the prompt immediately.
+				if (allowPublicEdits && _username) {
+					var prompt = document.getElementById('name-prompt');
+					if (prompt) { prompt.classList.add('hidden'); }
+				}
+
+				// Allow pressing Enter to submit the name prompt.
+				var nameInput = document.getElementById('username-input');
+				if (nameInput) {
+					nameInput.addEventListener('keydown', function(e) {
+						if (e.key === 'Enter') { window.joinSession(); }
+					});
+				}
+
+				// --- Excalidraw Mount ---
+				var React = window.ExcalidrawBundle.React;
+				var ReactDOM = window.ExcalidrawBundle.ReactDOM;
+				var Excalidraw = window.ExcalidrawBundle.Excalidraw;
+
+				var excalidrawProps = {
+					viewModeEnabled: !allowPublicEdits,
 					theme: document.documentElement.classList.contains('dark') ? 'dark' : 'light',
 					excalidrawAPI: function(api) {
 						_api = api;
@@ -69,7 +195,39 @@ templ SharedPage(title string, slug string) {
 							})
 							.catch(function(e) { console.error('Load error:', e); });
 					}
-				}));
+				};
+
+				if (allowPublicEdits) {
+					excalidrawProps.onChange = function(elements, appState) {
+						// Loop guard: skip re-broadcasting if this onChange is a reaction
+						// to a remote updateScene() call (fingerprint will match).
+						var fp = buildFingerprint(elements);
+						if (fp && fp === _networkFingerprint) {
+							_networkFingerprint = null;
+							return; // Network echo — drop silently, don't broadcast
+						}
+						_networkFingerprint = null;
+
+						// Genuine local change — broadcast to the hub.
+						if (_ws && _ws.readyState === WebSocket.OPEN && _username) {
+							_ws.send(JSON.stringify({ type: 'update', elements: elements }));
+						}
+					};
+
+					excalidrawProps.onPointerUpdate = function(payload) {
+						if (_ws && _ws.readyState === WebSocket.OPEN && _username && payload.pointer) {
+							_ws.send(JSON.stringify({
+								type: 'pointer',
+								clientId: _clientId,
+								username: _username,
+								pointer: payload.pointer
+							}));
+						}
+					};
+				}
+
+				var root = ReactDOM.createRoot(mount);
+				root.render(React.createElement(Excalidraw, excalidrawProps));
 			})();
 		</script>
 	}

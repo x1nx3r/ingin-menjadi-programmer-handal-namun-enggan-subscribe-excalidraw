@@ -129,9 +129,18 @@ templ CanvasPage(title string, drawingId string, isVIP bool) {
 					var mount = document.getElementById('canvas-mount');
 					var _dirty = false;
 					var _scene = null;
-					// _wsElements tracks the last element state received from the network.
-					// Used in Phase 5 as the loop guard for the infinite broadcast prevention.
 					var _wsElements = null;
+					// Fingerprint of the last network update used to detect echo onChange calls.
+					var _networkFingerprint = null;
+					// Live collaborator cursor map: clientId -> { pointer, username }
+					var _collaborators = new Map();
+
+					function buildFingerprint(elements) {
+						if (!elements || !elements.length) return '';
+						return elements.map(function(el) {
+							return el.id + ':' + el.versionNonce;
+						}).sort().join(',');
+					}
 
 					// WebSocket — broadcaster (owner sends all local changes to the hub).
 					var _ws = null;
@@ -139,13 +148,18 @@ templ CanvasPage(title string, drawingId string, isVIP bool) {
 						var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
 						_ws = new WebSocket(proto + '//' + location.host + '/api/draw/' + id + '/ws');
 						_ws.onmessage = function(event) {
-							// Owner receives back patches from guests (Phase 5).
-							// Store as _wsElements for the loop guard in onChange.
 							try {
 								var payload = JSON.parse(event.data);
 								if (payload.type === 'update' && payload.elements) {
 									_wsElements = payload.elements;
+									_networkFingerprint = buildFingerprint(payload.elements);
 									window.excalidrawAPI.updateScene({ elements: payload.elements });
+								} else if (payload.type === 'pointer' && payload.clientId) {
+									_collaborators.set(payload.clientId, {
+										pointer: payload.pointer,
+										username: payload.username || 'Guest'
+									});
+									window.excalidrawAPI.updateScene({ collaborators: new Map(_collaborators) });
 								}
 							} catch(e) {}
 						};
@@ -176,11 +190,29 @@ templ CanvasPage(title string, drawingId string, isVIP bool) {
 						},
 						onChange: function(elements, appState) {
 							_scene = { elements: elements, appState: appState };
+							// Loop guard: if this onChange is a reaction to a network updateScene(),
+							// the fingerprint will match. Persist the change (dirty) but don't re-broadcast.
+							var fp = buildFingerprint(elements);
+							if (fp && fp === _networkFingerprint) {
+								_networkFingerprint = null;
+								_dirty = true; // persist guest changes via owner autosave
+								return;
+							}
+							_networkFingerprint = null;
 							_dirty = true;
-							// Broadcast local changes to the hub so guests see them in real-time.
-							// _wsElements guard (Phase 5) will go here to prevent echo loops.
+							// Genuine local change — broadcast to the hub.
 							if (_ws && _ws.readyState === WebSocket.OPEN) {
 								_ws.send(JSON.stringify({ type: 'update', elements: elements }));
+							}
+						},
+						onPointerUpdate: function(payload) {
+							if (_ws && _ws.readyState === WebSocket.OPEN) {
+								_ws.send(JSON.stringify({
+									type: 'pointer',
+									clientId: 'owner-' + id,
+									username: 'Owner',
+									pointer: payload.pointer
+								}));
 							}
 						},
 						theme: document.documentElement.classList.contains('dark') ? 'dark' : 'light',
