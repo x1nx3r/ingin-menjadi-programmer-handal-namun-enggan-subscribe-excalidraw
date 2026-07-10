@@ -78,6 +78,7 @@ func main() {
 	// WebSocket routes
 	mux.Handle("GET /api/draw/{id}/ws", lib.RequireAuth(api.OwnerWSHandler))
 	mux.HandleFunc("GET /api/shared/{slug}/ws", api.GuestWSHandler)
+	mux.HandleFunc("GET /api/ws/stats", api.WsStatsHandler) // plain-text hub diagnostic
 
 	// Super-admin panel (404 for everyone else)
 	adminMux := http.NewServeMux()
