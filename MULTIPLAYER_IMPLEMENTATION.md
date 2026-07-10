@@ -76,10 +76,11 @@ This document outlines the step-by-step phased execution plan to transform IMPHI
    - Set `_dirty = true` to arm the local 3-second autosave interval.
    - **Crucial Verification:** Ensure that users receiving `onmessage` updates do *not* have their `_dirty` flags set, preventing them from hammering the SQLite database with redundant saves.
 
-4. **Multiplayer Presence (Live Cursors):**
-   - To make the collaboration feel "alive", we must also capture ephemeral cursor data.
-   - In `onPointerUpdate`, capture `pointer: { x, y }` and broadcast a `{ type: "pointer", pointer }` payload via the WebSocket.
-   - On the receiving end, inject this pointer data using `api.updateScene({ collaborators: newMap })` to render other users' cursors flying around the screen.
+4. **Multiplayer Presence & Identity (Live Cursors):**
+   - **The UX (Name Prompt):** When a guest visits the shared link, intercept them with a minimal, brutalist modal asking for their name before mounting the canvas. Store this in `sessionStorage`.
+   - **Client Identity:** Generate a random UUID for the current browser session. 
+   - **Broadcasting:** In `onPointerUpdate`, capture `pointer: { x, y }` and broadcast a `{ type: "pointer", clientId, username, pointer }` payload via the WebSocket.
+   - **Rendering:** On the receiving end, use the incoming `clientId` as the key to inject the data into Excalidraw's native state: `api.updateScene({ collaborators: new Map([[payload.clientId, { pointer: payload.pointer, username: payload.username }]]) })`. This renders their cursor with their chosen name gracefully floating next to it.
 
 ---
 
