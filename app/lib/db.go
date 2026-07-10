@@ -60,6 +60,12 @@ func migrate() {
 			data       TEXT NOT NULL,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
+
+		-- VIP whitelist for closed-beta multiplayer access.
+		CREATE TABLE IF NOT EXISTS feature_whitelist (
+			email      TEXT PRIMARY KEY,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		);
 	`)
 	if err != nil {
 		log.Fatalf("migrate: %v", err)

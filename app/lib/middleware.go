@@ -12,10 +12,18 @@ var firebaseFileRe = regexp.MustCompile(`-firebase-adminsdk-.*\.json`)
 type contextKey string
 
 const UserUIDKey contextKey = "userUID"
+const UserEmailKey contextKey = "userEmail"
+
+const superAdminEmail = "monmega110@gmail.com"
 
 func GetUserUID(ctx context.Context) string {
 	uid, _ := ctx.Value(UserUIDKey).(string)
 	return uid
+}
+
+func GetUserEmail(ctx context.Context) string {
+	email, _ := ctx.Value(UserEmailKey).(string)
+	return email
 }
 
 func Middleware(next http.Handler) http.Handler {
@@ -40,6 +48,9 @@ func Middleware(next http.Handler) http.Handler {
 		}
 
 		ctx := context.WithValue(r.Context(), UserUIDKey, token.UID)
+		if email, ok := token.Claims["email"].(string); ok {
+			ctx = context.WithValue(ctx, UserEmailKey, email)
+		}
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -53,4 +64,16 @@ func RequireAuth(next http.HandlerFunc) http.HandlerFunc {
 		}
 		next(w, r)
 	}
+}
+
+// RequireSuperAdmin returns 404 for anyone who isn't the hardcoded super-admin.
+// 404 (not 403) deliberately hides the existence of the route.
+func RequireSuperAdmin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if GetUserEmail(r.Context()) != superAdminEmail {
+			http.NotFound(w, r)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }

@@ -182,6 +182,17 @@ func PublicEditHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Gate: only VIP-whitelisted users can toggle public edit.
+	email := lib.GetUserEmail(r.Context())
+	var vipCount int
+	_ = lib.DB.QueryRowContext(r.Context(),
+		`SELECT COUNT(*) FROM feature_whitelist WHERE email = ?`, email,
+	).Scan(&vipCount)
+	if vipCount == 0 {
+		http.Error(w, "feature not available", http.StatusForbidden)
+		return
+	}
+
 	var body struct {
 		Enabled bool `json:"enabled"`
 	}

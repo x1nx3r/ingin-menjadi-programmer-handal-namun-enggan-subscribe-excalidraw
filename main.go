@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"gotth/app"
+	"gotth/app/admin"
 	"gotth/app/api"
 	"gotth/app/assets"
 	"gotth/app/canvas"
@@ -73,6 +74,13 @@ func main() {
 
 	mux.HandleFunc("GET /shared/{slug}", canvas.SharedPageHandler)
 	mux.HandleFunc("GET /api/shared/{slug}/data", api.SharedDataHandler)
+
+	// Super-admin panel (404 for everyone else)
+	adminMux := http.NewServeMux()
+	adminMux.HandleFunc("GET /admin/vip", admin.PageHandler)
+	adminMux.HandleFunc("POST /admin/vip/add", admin.AddHandler)
+	adminMux.HandleFunc("DELETE /admin/vip/remove", admin.RemoveHandler)
+	mux.Handle("/admin/", lib.RequireSuperAdmin(adminMux))
 
 
 

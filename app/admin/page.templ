@@ -1,0 +1,68 @@
+package admin
+
+import (
+	"time"
+)
+
+type WhitelistEntry struct {
+	Email     string
+	CreatedAt time.Time
+}
+
+templ AdminPage(entries []WhitelistEntry) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+			<title>VIP Admin — IMPHISE</title>
+			<script src="https://unpkg.com/htmx.org@2.0.4" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous"></script>
+			<style>
+				body { font-family: monospace; max-width: 640px; margin: 40px auto; padding: 0 16px; background: #1e1e2e; color: #cdd6f4; }
+				h1 { font-size: 1rem; text-transform: uppercase; letter-spacing: 0.1em; border-bottom: 2px solid #cdd6f4; padding-bottom: 8px; }
+				form { display: flex; gap: 8px; margin: 24px 0; }
+				input { flex: 1; background: #181825; border: 2px solid #cdd6f4; color: #cdd6f4; padding: 6px 10px; font-family: monospace; font-size: 0.875rem; }
+				button { background: transparent; border: 2px solid #cdd6f4; color: #cdd6f4; padding: 6px 12px; font-family: monospace; font-size: 0.875rem; cursor: pointer; text-transform: uppercase; }
+				button:hover { background: #cdd6f4; color: #1e1e2e; }
+				ul { list-style: none; padding: 0; margin: 0; }
+				li { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #313244; }
+				.email { font-size: 0.875rem; }
+				.meta { font-size: 0.75rem; color: #6c7086; }
+				.revoke { border-color: #f38ba8; color: #f38ba8; padding: 4px 8px; font-size: 0.75rem; }
+				.revoke:hover { background: #f38ba8; color: #1e1e2e; }
+				.empty { color: #6c7086; font-size: 0.875rem; margin: 16px 0; }
+			</style>
+		</head>
+		<body>
+			<h1>⚡ VIP Whitelist</h1>
+			<form hx-post="/admin/vip/add" hx-target="#vip-list" hx-swap="beforeend">
+				<input type="email" name="email" placeholder="user@example.com" required/>
+				<button type="submit">Add</button>
+			</form>
+			<ul id="vip-list">
+				if len(entries) == 0 {
+					<p class="empty">No VIPs yet.</p>
+				}
+				for _, e := range entries {
+					@WhitelistItem(e)
+				}
+			</ul>
+		</body>
+	</html>
+}
+
+templ WhitelistItem(e WhitelistEntry) {
+	<li>
+		<div>
+			<div class="email">{ e.Email }</div>
+			<div class="meta">Added { e.CreatedAt.Format("2006-01-02 15:04") }</div>
+		</div>
+		<button
+			class="revoke"
+			hx-delete={ "/admin/vip/remove?email=" + e.Email }
+			hx-target="closest li"
+			hx-swap="outerHTML"
+			hx-confirm={ "Revoke access for " + e.Email + "?" }
+		>Revoke</button>
+	</li>
+}

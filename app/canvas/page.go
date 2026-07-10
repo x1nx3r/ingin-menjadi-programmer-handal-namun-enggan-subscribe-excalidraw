@@ -29,5 +29,16 @@ func PageHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	CanvasPage(title, id).Render(r.Context(), w)
+	// Check if the current user is on the VIP whitelist.
+	var isVIP bool
+	if email := lib.GetUserEmail(r.Context()); email != "" {
+		var count int
+		_ = lib.DB.QueryRowContext(r.Context(),
+			`SELECT COUNT(*) FROM feature_whitelist WHERE email = ?`, email,
+		).Scan(&count)
+		isVIP = count > 0
+	}
+
+	CanvasPage(title, id, isVIP).Render(r.Context(), w)
 }
+

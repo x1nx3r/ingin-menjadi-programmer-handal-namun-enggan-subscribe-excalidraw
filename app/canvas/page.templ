@@ -5,7 +5,7 @@ import (
 	"gotth/app/components"
 )
 
-templ CanvasPage(title string, drawingId string) {
+templ CanvasPage(title string, drawingId string, isVIP bool) {
 	<!DOCTYPE html>
 	<html lang="en" class="h-full">
 		<head>
@@ -92,14 +92,22 @@ templ CanvasPage(title string, drawingId string) {
 					<input id="share-link" type="text" readonly class="w-full border-2 border-[var(--border)] bg-[var(--bg-subtle)] px-3 py-2 text-xs font-mono mb-3" onclick="this.select()"/>
 					<div class="flex items-center justify-between border-2 border-[var(--border)] bg-[var(--bg-subtle)] px-3 py-2 mb-3">
 						<span class="text-xs font-bold uppercase tracking-wider">Live Collaboration</span>
-						<button
-							id="collab-toggle"
-							onclick="togglePublicEdit()"
-							class="btn btn-ghost px-3 py-1 text-[10px] uppercase tracking-wider"
-							data-enabled="false"
-						>Off</button>
+						if isVIP {
+							<button
+								id="collab-toggle"
+								onclick="togglePublicEdit()"
+								class="btn btn-ghost px-3 py-1 text-[10px] uppercase tracking-wider"
+								data-enabled="false"
+							>Off</button>
+						} else {
+							<span class="text-[10px] text-[var(--fg-muted)] uppercase tracking-wider">Invite Only</span>
+						}
 					</div>
-					<p class="text-[10px] text-[var(--fg-muted)] mb-3">When on, anyone with the link can draw on this canvas.</p>
+					if isVIP {
+						<p class="text-[10px] text-[var(--fg-muted)] mb-3">When on, anyone with the link can draw on this canvas.</p>
+					} else {
+						<p class="text-[10px] text-[var(--fg-muted)] mb-3">Live collaboration is currently invite-only.</p>
+					}
 					<div class="flex gap-2 justify-end">
 						<button onclick="copyShareLink()" class="btn btn-ghost px-3 py-1.5 text-xs">Copy</button>
 						<button onclick="closeShare()" class="btn btn-ghost px-3 py-1.5 text-xs">Close</button>
