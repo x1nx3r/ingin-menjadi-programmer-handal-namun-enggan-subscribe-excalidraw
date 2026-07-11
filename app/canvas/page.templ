@@ -323,7 +323,6 @@ templ CanvasPage(title string, drawingId string, isVIP bool) {
 						var snapshot = _scene;
 						fetch('/api/draw/' + id + '/save', {
 							method: 'POST',
-							keepalive: true,
 							body: JSON.stringify(snapshot)
 						}).then(function() {
 							generateThumbnail(snapshot.elements, snapshot.appState);
