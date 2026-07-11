@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -47,7 +48,9 @@ func (r *Room) loadFromDB() {
 		return
 	}
 	var content string
-	err := lib.DB.QueryRow("SELECT content FROM drawings WHERE id = ?", r.drawingID).Scan(&content)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	err := lib.DB.QueryRowContext(ctx, "SELECT content FROM drawings WHERE id = ?", r.drawingID).Scan(&content)
 	if err != nil || content == "" {
 		return
 	}
@@ -147,7 +150,7 @@ func (r *Room) remove(client *Client) {
 	}
 }
 
-func (r *Room) sendSceneInit(client *Client) {
+func (r *Room) sendSceneInit(client *Client) bool {
 	r.mu.Lock()
 	elements := r.lastElements
 	r.mu.Unlock()
@@ -159,12 +162,14 @@ func (r *Room) sendSceneInit(client *Client) {
 	})
 	select {
 	case client.Send <- msg:
+		return true
 	default:
 		log.Printf("[hub] sendSceneInit DROP key=%s remote=%s buffer full", r.key, client.Conn.RemoteAddr())
 		r.mu.Lock()
 		close(client.Send)
 		delete(r.clients, client)
 		r.mu.Unlock()
+		return false
 	}
 }
 
@@ -285,6 +290,20 @@ func HubRooms() []HubRoomInfo {
 		})
 	}
 	return out
+}
+
+// ShutdownHub closes all active WebSocket connections so readPump/writePump
+// goroutines exit and http.Server.Shutdown() can drain cleanly.
+func ShutdownHub() {
+	hub.mu.Lock()
+	for _, room := range hub.rooms {
+		room.mu.Lock()
+		for client := range room.clients {
+			client.Conn.Close()
+		}
+		room.mu.Unlock()
+	}
+	hub.mu.Unlock()
 }
 
 func HubStats() string {

@@ -1,11 +1,14 @@
 package main
 
 import (
-	"fmt"
+	"context"
 	"io/fs"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"gotth/app"
 	"gotth/app/admin"
@@ -52,7 +55,7 @@ func main() {
 	})))
 
 	// Auth
-	mux.HandleFunc("POST /auth/login", lib.LoginHandler)
+	mux.Handle("POST /auth/login", lib.RateLimitAuth(lib.LoginHandler))
 	mux.HandleFunc("POST /auth/logout", lib.LogoutHandler)
 	mux.HandleFunc("GET /auth/user", lib.UserHandler)
 
@@ -65,12 +68,12 @@ func main() {
 
 	// API
 	mux.Handle("GET /api/draw/{id}/data", lib.RequireAuth(api.DataHandler))
-	mux.Handle("POST /api/draw/{id}/save", lib.RequireAuth(api.SaveHandler))
-	mux.Handle("POST /api/draw/{id}/share", lib.RequireAuth(api.ShareHandler))
-	mux.Handle("PUT /api/draw/{id}/rename", lib.RequireAuth(api.RenameHandler))
-	mux.Handle("POST /api/draw/{id}/thumbnail", lib.RequireAuth(api.ThumbnailHandler))
-	mux.Handle("PUT /api/draw/{id}/public-edit", lib.RequireAuth(api.PublicEditHandler))
-	mux.Handle("DELETE /api/draw/{id}", lib.RequireAuth(api.DeleteHandler))
+	mux.Handle("POST /api/draw/{id}/save", lib.RequireAuth(lib.RateLimitAPI(api.SaveHandler)))
+	mux.Handle("POST /api/draw/{id}/share", lib.RequireAuth(lib.RateLimitAPI(api.ShareHandler)))
+	mux.Handle("PUT /api/draw/{id}/rename", lib.RequireAuth(lib.RateLimitAPI(api.RenameHandler)))
+	mux.Handle("POST /api/draw/{id}/thumbnail", lib.RequireAuth(lib.RateLimitAPI(api.ThumbnailHandler)))
+	mux.Handle("PUT /api/draw/{id}/public-edit", lib.RequireAuth(lib.RateLimitAPI(api.PublicEditHandler)))
+	mux.Handle("DELETE /api/draw/{id}", lib.RequireAuth(lib.RateLimitAPI(api.DeleteHandler)))
 
 	mux.HandleFunc("GET /shared/{slug}", canvas.SharedPageHandler)
 	mux.HandleFunc("GET /api/shared/{slug}/data", api.SharedDataHandler)
@@ -80,7 +83,7 @@ func main() {
 	mux.Handle("GET /api/draw/{id}/collab-status", lib.RequireAuth(api.CollabStatusHandler))
 	mux.Handle("GET /api/draw/{id}/collab-events", lib.RequireAuth(api.CollabEventsHandler))
 	mux.HandleFunc("GET /api/shared/{slug}/ws", api.GuestWSHandler)
-	mux.HandleFunc("GET /api/ws/stats", api.WsStatsHandler) // plain-text hub diagnostic
+	mux.Handle("GET /api/ws/stats", lib.RequireSuperAdmin(http.HandlerFunc(api.WsStatsHandler)))
 
 	// SEO: robots.txt
 	mux.HandleFunc("GET /robots.txt", func(w http.ResponseWriter, r *http.Request) {
@@ -119,6 +122,39 @@ func main() {
 		port = "3000"
 	}
 	addr := ":" + port
-	fmt.Printf("Canvas running at http://localhost%s\n", addr)
-	log.Fatal(http.ListenAndServe(addr, wrapped))
+
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           wrapped,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+
+	// Graceful shutdown on SIGINT/SIGTERM.
+	go func() {
+		sig := make(chan os.Signal, 1)
+		signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+		<-sig
+		log.Println("shutting down...")
+
+		// Stop the WAL checkpoint goroutine.
+		lib.StopWAL()
+
+		// Force-close all WebSocket connections so their goroutines exit.
+		api.ShutdownHub()
+
+		// Drain HTTP connections with a deadline.
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(ctx); err != nil {
+			log.Printf("http shutdown: %v", err)
+		}
+	}()
+
+	log.Printf("Canvas running at http://localhost%s\n", addr)
+	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
+		log.Fatal(err)
+	}
 }

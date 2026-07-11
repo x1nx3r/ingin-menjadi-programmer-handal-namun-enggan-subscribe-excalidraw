@@ -7,6 +7,13 @@ import (
 	"gotth/app/components"
 )
 
+func isHTTPS(r *http.Request) bool {
+	if r.TLS != nil {
+		return true
+	}
+	return r.Header.Get("X-Forwarded-Proto") == "https"
+}
+
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -33,13 +40,12 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		MaxAge:   14 * 24 * 60 * 60,
 		HttpOnly: true,
-		Secure:   false,
+		Secure:   isHTTPS(r),
 		SameSite: http.SameSiteStrictMode,
 	})
 
 	w.Header().Set("Content-Type", "text/html")
 	w.Header().Set("HX-Redirect", "/drawings")
-	// Page redirects immediately; auth bar swap is cosmetic only.
 	w.Write([]byte(`<div id="auth-bar" hx-swap-oob="true"></div>`))
 }
 
@@ -56,7 +62,7 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
-		Secure:   false,
+		Secure:   isHTTPS(r),
 		SameSite: http.SameSiteStrictMode,
 	})
 

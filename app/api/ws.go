@@ -28,9 +28,15 @@ const (
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  4096,
 	WriteBufferSize: 4096,
-	// Allow same origin only in production; the Caddy reverse proxy sits in front.
 	CheckOrigin: func(r *http.Request) bool {
-		return true
+		origin := r.Header.Get("Origin")
+		switch origin {
+		case "https://canvas.x1nx3r.dev",
+			"http://localhost:3000",
+			"http://localhost:5173":
+			return true
+		}
+		return false
 	},
 }
 
@@ -155,14 +161,19 @@ func serveWS(w http.ResponseWriter, r *http.Request, roomKey string) {
 
 	client := &Client{
 		Conn: conn,
-		Send: make(chan []byte, 256),
+		Send: make(chan []byte, 32),
 	}
 
 	room := getOrCreateRoom(roomKey)
 	room.add(client)
 
 	// Send the current scene to the new client immediately on connect.
-	room.sendSceneInit(client)
+	// If the send buffer is full, bail before starting pumps.
+	if !room.sendSceneInit(client) {
+		room.remove(client)
+		client.Conn.Close()
+		return
+	}
 
 	// Start the write pump in a background goroutine.
 	go writePump(client, roomKey, room)
@@ -191,7 +202,7 @@ func readPump(client *Client, roomKey string, room *Room) {
 	for {
 		_, msg, err := client.Conn.ReadMessage()
 		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
 				log.Printf("[ws]  read  ERR  room=%s remote=%s err=%v", roomKey, client.Conn.RemoteAddr(), err)
 			}
 			return

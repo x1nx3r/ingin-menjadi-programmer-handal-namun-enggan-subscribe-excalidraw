@@ -129,6 +129,7 @@ func RenameHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, 1024)
 	var body struct {
 		Title string `json:"title"`
 	}
@@ -193,6 +194,7 @@ func PublicEditHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, 128)
 	var body struct {
 		Enabled bool `json:"enabled"`
 	}

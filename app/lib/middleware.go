@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"os"
 	"regexp"
 )
 
@@ -14,7 +15,12 @@ type contextKey string
 const UserUIDKey contextKey = "userUID"
 const UserEmailKey contextKey = "userEmail"
 
-const superAdminEmail = "monmega110@gmail.com"
+var superAdminEmail = func() string {
+	if e := os.Getenv("SUPER_ADMIN_EMAIL"); e != "" {
+		return e
+	}
+	return "monmega110@gmail.com"
+}()
 
 func GetUserUID(ctx context.Context) string {
 	uid, _ := ctx.Value(UserUIDKey).(string)

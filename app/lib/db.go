@@ -8,11 +8,20 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-var DB *sql.DB
-var dbPath string
+var (
+	DB      *sql.DB
+	dbPath  string
+	stopWAL chan struct{}
+)
 
 func GetDBPath() string {
 	return dbPath
+}
+
+func StopWAL() {
+	if stopWAL != nil {
+		close(stopWAL)
+	}
 }
 
 func InitDB(path string) {
@@ -33,10 +42,18 @@ func InitDB(path string) {
 
 	// Periodically checkpoint the WAL so it doesn't balloon between restarts.
 	// PASSIVE mode never blocks readers or writers.
+	stopWAL = make(chan struct{})
 	go func() {
-		for range time.Tick(5 * time.Minute) {
-			if _, err := DB.Exec("PRAGMA wal_checkpoint(PASSIVE)"); err != nil {
-				log.Printf("wal_checkpoint: %v", err)
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				if _, err := DB.Exec("PRAGMA wal_checkpoint(PASSIVE)"); err != nil {
+					log.Printf("wal_checkpoint: %v", err)
+				}
+			case <-stopWAL:
+				return
 			}
 		}
 	}()
