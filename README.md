@@ -59,19 +59,18 @@ beforeunload
 Someone opens your shared link. The server snitches on them. Your browser reluctantly upgrades to WebSocket:
 
 ```
-1. Guest opens /shared/{slug}
-2. Guest connects WebSocket immediately (they're eager)
-3. Your page: "Are they still there?" polls every 1s
-4. Server: "Yeah there's one person"
-5. Your page: "Ugh, fine" → opens WebSocket
-6. You send a full SCENE_UPDATE
-7. Both of you now exchange full scenes on every onChange
-8. Last guest leaves → COLLAB_ENDED → WebSocket closes
-9. You go back to HTTP solo mode
-10. The poll keeps running but now it returns 0
-11. Nobody is watching you draw ever again
-12. It's just you and your boxes
-13. Like it should be
+ 1. Guest opens /shared/{slug}
+ 2. Guest connects WebSocket immediately (they're eager)
+ 3. Server pushes an SSE event to your page: "someone joined"
+ 4. Your page: "Ugh, fine" → opens WebSocket
+ 5. You send a full SCENE_UPDATE
+ 6. Both of you now exchange full scenes on every onChange
+ 7. Last guest leaves → SSE event: "they're gone"
+ 8. COLLAB_ENDED → WebSocket closes
+ 9. You go back to HTTP solo mode
+10. Nobody is watching you draw ever again
+11. It's just you and your boxes
+12. Like it should be
 ```
 
 The WebSocket is a stateless pipe. The server never looks at your JSON. It just copies bytes. Server crash? Reconnect. Full SCENE_UPDATE resyncs. Zero data loss. The only state the server keeps is a convenience cache loaded from SQLite, and if that cache is wrong, the next full SCENE_UPDATE fixes it.
