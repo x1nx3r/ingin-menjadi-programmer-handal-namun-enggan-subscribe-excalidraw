@@ -69,7 +69,7 @@ dev: $(TAILWIND_BIN) bundle
 
 ## bundle: Bundle Excalidraw with esbuild
 bundle: app/assets/excalidraw/node_modules
-	npx esbuild app/assets/excalidraw/entry.js --bundle --outfile=app/assets/public/excalidraw.bundle.js --minify --format=iife --global-name=ExcalidrawBundle
+	npx esbuild app/assets/excalidraw/entry.js --bundle --outfile=app/assets/public/excalidraw.bundle.js --minify --format=iife --global-name=ExcalidrawBundle --define:process.env.NODE_ENV='"production"'
 
 app/assets/excalidraw/node_modules: app/assets/excalidraw/package.json
 	cd app/assets/excalidraw && npm install

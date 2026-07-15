@@ -3,7 +3,6 @@ package api
 import (
 	"crypto/rand"
 	"database/sql"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"io"
@@ -11,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"gotth/app/lib"
@@ -187,29 +185,22 @@ func SaveFileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	r.Body = http.MaxBytesReader(w, r.Body, 10*1024*1024) // 10 MB limit
-	var body struct {
-		FileID   string `json:"fileId"`
-		MimeType string `json:"mimeType"`
-		Data     string `json:"data"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "invalid body", http.StatusBadRequest)
-		return
-	}
-	if body.FileID == "" || body.MimeType == "" || body.Data == "" {
-		http.Error(w, "missing fields", http.StatusBadRequest)
+	fileID := r.URL.Query().Get("fileId")
+	if fileID == "" {
+		http.Error(w, "missing fileId", http.StatusBadRequest)
 		return
 	}
 
-	// Decode base64 data URL: "data:image/webp;base64,..."
-	raw := body.Data
-	if idx := strings.Index(raw, "base64,"); idx >= 0 {
-		raw = raw[idx+7:]
+	mimeType := r.Header.Get("Content-Type")
+	if mimeType == "" {
+		http.Error(w, "missing Content-Type", http.StatusBadRequest)
+		return
 	}
-	blob, err := base64.StdEncoding.DecodeString(raw)
+
+	r.Body = http.MaxBytesReader(w, r.Body, 10*1024*1024) // 10 MB limit
+	blob, err := io.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, "invalid base64", http.StatusBadRequest)
+		http.Error(w, "payload too large", http.StatusRequestEntityTooLarge)
 		return
 	}
 	fileSize := int64(len(blob))
@@ -245,8 +236,8 @@ func SaveFileHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "server error", http.StatusInternalServerError)
 		return
 	}
-	if err := os.WriteFile(filepath.Join(dir, body.FileID), blob, 0644); err != nil {
-		log.Printf("write file %s/%s: %v", id, body.FileID, err)
+	if err := os.WriteFile(filepath.Join(dir, fileID), blob, 0644); err != nil {
+		log.Printf("write file %s/%s: %v", id, fileID, err)
 		http.Error(w, "server error", http.StatusInternalServerError)
 		return
 	}
@@ -254,10 +245,10 @@ func SaveFileHandler(w http.ResponseWriter, r *http.Request) {
 	// Insert DB row and update quota in the same transaction.
 	_, err = tx.ExecContext(r.Context(),
 		`INSERT OR REPLACE INTO drawing_files (id, drawing_id, owner_id, mime_type, file_size) VALUES (?, ?, ?, ?, ?)`,
-		body.FileID, id, uid, body.MimeType, fileSize,
+		fileID, id, uid, mimeType, fileSize,
 	)
 	if err != nil {
-		log.Printf("insert drawing_file %s/%s: %v", id, body.FileID, err)
+		log.Printf("insert drawing_file %s/%s: %v", id, fileID, err)
 		http.Error(w, "server error", http.StatusInternalServerError)
 		return
 	}
@@ -272,7 +263,7 @@ func SaveFileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := tx.Commit(); err != nil {
-		log.Printf("commit file tx %s/%s: %v", id, body.FileID, err)
+		log.Printf("commit file tx %s/%s: %v", id, fileID, err)
 		http.Error(w, "server error", http.StatusInternalServerError)
 		return
 	}
@@ -386,28 +377,44 @@ func DeleteHandler(w http.ResponseWriter, r *http.Request) {
 
 	uid := lib.GetUserUID(r.Context())
 
-	// Collect file sizes before CASCADE delete removes the rows.
+	tx, err := lib.DB.BeginTx(r.Context(), nil)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	// Collect file sizes for quota adjustment before cascade deletes them.
 	var totalSize int64
-	_ = lib.DB.QueryRowContext(r.Context(),
+	_ = tx.QueryRowContext(r.Context(),
 		`SELECT COALESCE(SUM(file_size), 0) FROM drawing_files WHERE drawing_id = ? AND owner_id = ?`,
 		id, uid,
 	).Scan(&totalSize)
 
-	// Remove files from disk (best-effort).
+	// Adjust quota before the cascade delete — if this fails we can still retry.
+	if totalSize > 0 {
+		_, err = tx.ExecContext(r.Context(),
+			`UPDATE users SET storage_used_bytes = MAX(0, storage_used_bytes - ?) WHERE uid = ?`,
+			totalSize, uid,
+		)
+		if err != nil {
+			http.Error(w, "quota update failed", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Remove files from disk (best-effort — we'll still commit the DB change).
 	os.RemoveAll(filepath.Join(lib.StorageRoot(), id))
 
-	_, err := lib.DB.ExecContext(r.Context(), "DELETE FROM drawings WHERE id = ?", id)
+	_, err = tx.ExecContext(r.Context(), "DELETE FROM drawings WHERE id = ?", id)
 	if err != nil {
 		http.Error(w, "delete failed", http.StatusInternalServerError)
 		return
 	}
 
-	// Adjust quota (best-effort; deletion already happened).
-	if totalSize > 0 {
-		lib.DB.ExecContext(r.Context(),
-			`UPDATE users SET storage_used_bytes = MAX(0, storage_used_bytes - ?) WHERE uid = ?`,
-			totalSize, uid,
-		)
+	if err := tx.Commit(); err != nil {
+		http.Error(w, "commit failed", http.StatusInternalServerError)
+		return
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -435,6 +442,11 @@ func sanitizeSceneJSON(raw string) []byte {
 	return sanitized
 }
 
+type fileEntry struct {
+	ID       string `json:"id"`
+	MimeType string `json:"mimeType"`
+}
+
 func writeSceneWithFiles(w http.ResponseWriter, drawingID, content string) {
 	sanitized := sanitizeSceneJSON(content)
 
@@ -445,8 +457,7 @@ func writeSceneWithFiles(w http.ResponseWriter, drawingID, content string) {
 		return
 	}
 
-	// Load files from disk and embed as data URLs.
-	files := buildFilesMap(drawingID)
+	files := listFiles(drawingID)
 	fileJSON, _ := json.Marshal(files)
 	parsed["files"] = fileJSON
 
@@ -454,9 +465,7 @@ func writeSceneWithFiles(w http.ResponseWriter, drawingID, content string) {
 	json.NewEncoder(w).Encode(parsed)
 }
 
-// buildFilesMap reads all files for a drawing from disk and returns
-// a map of fileId -> data:... URL (base64).
-func buildFilesMap(drawingID string) map[string]string {
+func listFiles(drawingID string) []fileEntry {
 	rows, err := lib.DB.Query(
 		`SELECT id, mime_type FROM drawing_files WHERE drawing_id = ?`, drawingID,
 	)
@@ -465,20 +474,55 @@ func buildFilesMap(drawingID string) map[string]string {
 	}
 	defer rows.Close()
 
-	files := make(map[string]string)
-	base := filepath.Join(lib.StorageRoot(), drawingID)
-
+	var files []fileEntry
 	for rows.Next() {
-		var fileID, mimeType string
-		if err := rows.Scan(&fileID, &mimeType); err != nil {
+		var f fileEntry
+		if err := rows.Scan(&f.ID, &f.MimeType); err != nil {
 			continue
 		}
-		blob, err := os.ReadFile(filepath.Join(base, fileID))
-		if err != nil {
-			continue
-		}
-		dataURL := "data:" + mimeType + ";base64," + base64.StdEncoding.EncodeToString(blob)
-		files[fileID] = dataURL
+		files = append(files, f)
 	}
 	return files
+}
+
+func ServeFileHandler(w http.ResponseWriter, r *http.Request) {
+	drawingID := r.PathValue("drawingId")
+	fileID := r.PathValue("fileId")
+
+	// Verify the file exists and get its mime type.
+	var mimeType string
+	err := lib.DB.QueryRowContext(r.Context(),
+		`SELECT mime_type FROM drawing_files WHERE drawing_id = ? AND id = ?`, drawingID, fileID,
+	).Scan(&mimeType)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	// Access control: owner of the drawing OR a publicly shared drawing.
+	uid := lib.GetUserUID(r.Context())
+	var ownerID string
+	var shareSlug sql.NullString
+	_ = lib.DB.QueryRowContext(r.Context(),
+		`SELECT owner_id, share_slug FROM drawings WHERE id = ?`, drawingID,
+	).Scan(&ownerID, &shareSlug)
+
+	hasAccess := uid != "" && uid == ownerID
+	if !hasAccess && shareSlug.Valid && shareSlug.String != "" {
+		hasAccess = true
+	}
+	if !hasAccess {
+		http.NotFound(w, r)
+		return
+	}
+
+	blob, err := os.ReadFile(filepath.Join(lib.StorageRoot(), drawingID, fileID))
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	w.Header().Set("Content-Type", mimeType)
+	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	w.Write(blob)
 }

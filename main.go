@@ -80,6 +80,9 @@ func main() {
 	mux.HandleFunc("GET /shared/{slug}", canvas.SharedPageHandler)
 	mux.HandleFunc("GET /api/shared/{slug}/data", api.SharedDataHandler)
 
+	// File serving — accessible by owner OR any shared drawing viewer.
+	mux.HandleFunc("GET /api/file/{drawingId}/{fileId}", api.ServeFileHandler)
+
 	// WebSocket routes
 	mux.Handle("GET /api/draw/{id}/ws", lib.RequireAuth(api.OwnerWSHandler))
 	mux.Handle("GET /api/draw/{id}/collab-status", lib.RequireAuth(api.CollabStatusHandler))

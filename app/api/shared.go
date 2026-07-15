@@ -36,8 +36,10 @@ func SharedDataHandler(w http.ResponseWriter, r *http.Request) {
 		return "false"
 	}())
 
-	// Embed files.
-	files := buildFilesMap(drawingID)
+	// Embed drawingId so the client can fetch files.
+	parsed["drawingId"] = json.RawMessage(`"` + drawingID + `"`)
+
+	files := listFiles(drawingID)
 	fileJSON, _ := json.Marshal(files)
 	parsed["files"] = fileJSON
 

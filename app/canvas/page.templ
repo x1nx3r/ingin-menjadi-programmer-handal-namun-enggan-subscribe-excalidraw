@@ -30,11 +30,12 @@ templ CanvasPage(title string, drawingId string, isVIP bool) {
 				})();
 			</script>
 			<style>
-				html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
-				#canvas-mount { width: 100%; height: calc(100vh - 56px); min-height: 200px; }
+				html, body { height: 100%; margin: 0; padding: 0; }
+				body { overflow: hidden; }
+				#canvas-mount { width: 100%; flex: 1; min-height: 0; overflow: hidden; }
 			</style>
 		</head>
-		<body class="h-full bg-[var(--bg)] text-[var(--fg)] antialiased">
+		<body class="flex flex-col h-full bg-[var(--bg)] text-[var(--fg)] antialiased">
 			<div class="flex items-center gap-2 sm:gap-3 px-3 sm:px-6 h-14 border-b-2 border-[var(--border)] bg-[var(--bg)]/95 relative" id="title-bar">
 				@components.Logo()
 				<input id="title-input" type="text" value={ title } onchange="renameDrawing(this.value)"
@@ -131,18 +132,70 @@ templ CanvasPage(title string, drawingId string, isVIP bool) {
 				var _dirty = false;
 				var _scene = null;
 				var _collaborators = new Map();
-				var _lastSceneVersion = -1;
 				var _sceneElements = [];
+				var _lastSceneVersion = -1;
 				var _uploadedFiles = new Set();
+				var _saving = false;
+				var _saveTimer = null;
+				var _saveWorker = new Worker(URL.createObjectURL(new Blob(['self.onmessage=function(e){self.postMessage(JSON.stringify(e.data))}'],{type:'application/javascript'})));
+				_saveWorker.onmessage = function(e) {
+					fetch('/api/draw/' + id + '/save', {
+						method: 'POST',
+						body: e.data
+					}).then(function() {
+						_saving = false;
+						generateThumbnail(_scene.elements, _scene.appState);
+						if (_dirty) doSave();
+					}).catch(function(e) {
+						console.error('Save error:', e);
+						_saving = false;
+					});
+				};
 
 				var _ws = null;
 				var _collabMode = false;
 				var _eventSource = null;
 				var _wsSendQueue = [];
+				var _broadcastTimer = null;
+
+				function fetchMissingFiles(elements, api) {
+					var missing = [];
+					elements.forEach(function(el) {
+						if (el.type === 'image' && el.fileId && !_uploadedFiles.has(el.fileId)) {
+							missing.push(el.fileId);
+						}
+					});
+					if (missing.length === 0) return;
+					var now = Date.now();
+					Promise.all(missing.map(function(fid) {
+						return fetch('/api/file/' + id + '/' + fid)
+							.then(function(r) { return r.blob(); })
+							.then(function(blob) {
+								return new Promise(function(resolve) {
+									var reader = new FileReader();
+									reader.onload = function() {
+										resolve({
+											id: fid,
+											mimeType: blob.type || 'image/webp',
+											dataURL: reader.result,
+											created: now,
+											lastRetrieved: now
+										});
+									};
+									reader.readAsDataURL(blob);
+								});
+							});
+					})).then(function(entries) {
+						var fileMap = {};
+						entries.forEach(function(e) { _uploadedFiles.add(e.id); fileMap[e.id] = e; });
+						api.addFiles(fileMap);
+					}).catch(function(e) { console.error('Fetch missing files:', e); });
+				}
 
 				function handleRemoteScene(remoteElements) {
 					if (!window.excalidrawAPI) return;
 					var api = window.excalidrawAPI;
+					fetchMissingFiles(remoteElements, api);
 					var appState = api.getAppState();
 					var existing = _sceneElements.length > 0 ? _sceneElements : api.getSceneElements();
 					var Bundle = window.ExcalidrawBundle;
@@ -176,12 +229,26 @@ templ CanvasPage(title string, drawingId string, isVIP bool) {
 				function downgradeToSolo() {
 					if (!_collabMode) return;
 					_collabMode = false;
+					// Flush pending broadcast before closing
+					if (_broadcastTimer) {
+						clearTimeout(_broadcastTimer);
+						_broadcastTimer = null;
+						flushBroadcast();
+					}
 					if (_ws) {
 						_ws.onclose = null;
 						_ws.close();
 						_ws = null;
 					}
-					if (_dirty && _scene) flushIfDirty();
+					if (_dirty && _scene) doSave();
+				}
+				function flushBroadcast() {
+					if (_ws && _ws.readyState === WebSocket.OPEN && _sceneElements.length > 0) {
+						_ws.send(JSON.stringify({
+							type: 'SCENE_UPDATE',
+							payload: { elements: _sceneElements }
+						}));
+					}
 				}
 
 				function wsSend(msg) {
@@ -238,33 +305,54 @@ templ CanvasPage(title string, drawingId string, isVIP bool) {
 				var Excalidraw = Bundle.Excalidraw;
 				var getSceneVersion = Bundle.getSceneVersion;
 
+				new ResizeObserver(function() {
+					window.dispatchEvent(new Event('resize'));
+				}).observe(mount);
+
 				var root = ReactDOM.createRoot(mount);
 				root.render(React.createElement(Excalidraw, {
 					excalidrawAPI: function(api) {
 						window.excalidrawAPI = api;
-						window.dispatchEvent(new Event('resize'));
 						fetch('/api/draw/' + id + '/data')
 							.then(function(r) { return r.json(); })
 							.then(function(data) {
-								if (data && data.elements) {
-									_lastSceneVersion = getSceneVersion(data.elements);
-									api.updateScene({ elements: data.elements, appState: data.appState });
+								if (!data || !data.elements) {
+									connectSSE();
+									return;
 								}
-								if (data && data.files) {
+								_lastSceneVersion = getSceneVersion(data.elements);
+								// Load files first so Excalidraw has the image data
+								// before rendering — avoids spurious img error events.
+								if (data.files && data.files.length > 0) {
 									var now = Date.now();
-									var fileEntries = {};
-									Object.keys(data.files).forEach(function(fid) {
-										_uploadedFiles.add(fid);
-										fileEntries[fid] = {
-											id: fid,
-											mimeType: data.files[fid].indexOf('image/svg') > -1 ? 'image/svg+xml' : 'image/webp',
-											dataURL: data.files[fid],
-											created: now,
-											lastRetrieved: now
-										};
+									return Promise.all(data.files.map(function(f) {
+										_uploadedFiles.add(f.id);
+										return fetch('/api/file/' + id + '/' + f.id)
+											.then(function(r) { return r.blob(); })
+											.then(function(blob) {
+												return new Promise(function(resolve) {
+													var reader = new FileReader();
+													reader.onload = function() {
+														resolve({
+															id: f.id,
+															mimeType: f.mimeType,
+															dataURL: reader.result,
+															created: now,
+															lastRetrieved: now
+														});
+													};
+													reader.readAsDataURL(blob);
+												});
+											});
+									})).then(function(entries) {
+										var fileMap = {};
+										entries.forEach(function(e) { fileMap[e.id] = e; });
+										api.addFiles(fileMap);
+										api.updateScene({ elements: data.elements, appState: data.appState });
+										connectSSE();
 									});
-									api.addFiles(fileEntries);
 								}
+								api.updateScene({ elements: data.elements, appState: data.appState });
 								connectSSE();
 							})
 							.catch(function(e) {
@@ -280,31 +368,26 @@ templ CanvasPage(title string, drawingId string, isVIP bool) {
 						if (version > _lastSceneVersion) {
 							_lastSceneVersion = version;
 							if (_collabMode && _ws) {
-								wsSend(JSON.stringify({
-									type: 'SCENE_UPDATE',
-									payload: { elements: elements }
-								}));
+								if (_broadcastTimer) clearTimeout(_broadcastTimer);
+								_broadcastTimer = setTimeout(function() {
+									_broadcastTimer = null;
+									wsSend(JSON.stringify({
+										type: 'SCENE_UPDATE',
+										payload: { elements: _sceneElements }
+									}));
+								}, 150);
 							}
 						}
 						if (files) {
 							Object.keys(files).forEach(function(fid) {
 								if (_uploadedFiles.has(fid)) return;
 								var f = files[fid];
-								fetch('/api/draw/' + id + '/file', {
-									method: 'POST',
-									headers: {'Content-Type': 'application/json'},
-									body: JSON.stringify({
-										fileId: fid,
-										mimeType: f.mimeType,
-										data: f.dataURL
-									})
-								}).then(function(r) {
-									if (r.ok) _uploadedFiles.add(fid);
-								}).catch(function(e) {
-									console.error('File upload error:', e);
-								});
+								uploadFile(fid, f.mimeType, f.dataURL);
 							});
 						}
+						// Debounce save — resets on every change, fires 2s after last one.
+						if (_saveTimer) clearTimeout(_saveTimer);
+						_saveTimer = setTimeout(doSave, 2000);
 					},
 					onPointerUpdate: function(payload) {
 						if (_collabMode && _ws && payload.pointer) {
@@ -334,6 +417,44 @@ templ CanvasPage(title string, drawingId string, isVIP bool) {
 					observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
 					window.drawingId = id;
 
+					window.uploadFile = function(fileId, mimeType, dataURL) {
+						if (mimeType === 'image/svg+xml') {
+							fetch(dataURL).then(function(r) { return r.blob(); }).then(function(blob) {
+								return fetch('/api/draw/' + id + '/file?fileId=' + fileId, {
+									method: 'POST',
+									headers: { 'Content-Type': 'image/svg+xml' },
+									body: blob
+								});
+							}).then(function(r) {
+								if (r.ok) _uploadedFiles.add(fileId);
+							}).catch(function(e) {
+								console.error('File upload error:', e);
+							});
+							return;
+						}
+						var img = new Image();
+						img.onload = function() {
+							var c = document.createElement('canvas');
+							c.width = img.naturalWidth;
+							c.height = img.naturalHeight;
+							c.getContext('2d').drawImage(img, 0, 0);
+							c.toBlob(function(blob) {
+								if (!blob) return;
+								fetch('/api/draw/' + id + '/file?fileId=' + fileId, {
+									method: 'POST',
+									headers: { 'Content-Type': 'image/webp' },
+									body: blob
+								}).then(function(r) {
+									if (r.ok) _uploadedFiles.add(fileId);
+								}).catch(function(e) {
+									console.error('File upload error:', e);
+								});
+							}, 'image/webp', 0.85);
+						};
+						img.onerror = function() { _uploadedFiles.add(fileId); };
+						img.src = dataURL;
+					};
+
 					window.generateThumbnail = function(elements, appState) {
 						var exportToBlob = window.ExcalidrawBundle.exportToBlob;
 						if (!exportToBlob) return;
@@ -351,39 +472,28 @@ templ CanvasPage(title string, drawingId string, isVIP bool) {
 							}).catch(function() {});
 					};
 
-					function flushIfDirty() {
-						if (_collabMode) return;
+					function doSave() {
+						if (_collabMode || _saving) return;
 						if (!_dirty || !_scene) return;
 						_dirty = false;
-						var snapshot = _scene;
-						fetch('/api/draw/' + id + '/save', {
-							method: 'POST',
-							body: JSON.stringify(snapshot)
-						}).then(function() {
-							generateThumbnail(snapshot.elements, snapshot.appState);
-						}).catch(function(e) {
-							console.error('Save error:', e);
-							_dirty = true;
-						});
+						_saving = true;
+						_saveWorker.postMessage(_scene);
 					}
-
-					setInterval(flushIfDirty, 3000);
 
 					window.addEventListener('beforeunload', function() {
 						if (!_dirty || !_scene) return;
-						if (_ws && _ws.readyState === WebSocket.OPEN) {
-							_ws.send(JSON.stringify({
-								type: 'SCENE_UPDATE',
-								payload: { elements: _sceneElements }
-							}));
+						if (_broadcastTimer) {
+							clearTimeout(_broadcastTimer);
+							_broadcastTimer = null;
 						}
+						flushBroadcast();
 						navigator.sendBeacon(
 							'/api/draw/' + id + '/save',
 							new Blob([JSON.stringify(_scene)], { type: 'application/json' })
 						);
 					});
 
-					window.saveDrawing = function() { flushIfDirty(); };
+					window.saveDrawing = function() { doSave(); };
 
 					window.renameDrawing = function(newTitle) {
 						fetch('/api/draw/' + id + '/rename', {
