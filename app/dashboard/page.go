@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"gotth/app/lib"
+	"gotth/app/middleware"
 )
 
 type Drawing struct {
@@ -19,7 +20,7 @@ type Drawing struct {
 }
 
 func PageHandler(w http.ResponseWriter, r *http.Request) {
-	uid := lib.GetUserUID(r.Context())
+	uid := middleware.GetUserUID(r.Context())
 	if uid == "" {
 		http.Redirect(w, r, "/", http.StatusFound)
 		return
@@ -52,7 +53,7 @@ func PageHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func NewHandler(w http.ResponseWriter, r *http.Request) {
-	uid := lib.GetUserUID(r.Context())
+	uid := middleware.GetUserUID(r.Context())
 	if uid == "" {
 		http.Redirect(w, r, "/", http.StatusFound)
 		return

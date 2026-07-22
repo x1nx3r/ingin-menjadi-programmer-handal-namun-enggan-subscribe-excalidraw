@@ -3,11 +3,11 @@ package app
 import (
 	"net/http"
 
-	"gotth/app/lib"
+	"gotth/app/middleware"
 )
 
 func PageHandler(w http.ResponseWriter, r *http.Request) {
-	uid := lib.GetUserUID(r.Context())
+	uid := middleware.GetUserUID(r.Context())
 	if uid != "" {
 		http.Redirect(w, r, "/drawings", http.StatusFound)
 		return

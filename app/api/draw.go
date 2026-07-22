@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"gotth/app/lib"
+	"gotth/app/middleware"
 )
 
 type sceneData struct {
@@ -29,7 +30,7 @@ func generateSlug() (string, error) {
 }
 
 func checkOwnership(r *http.Request, id string) bool {
-	uid := lib.GetUserUID(r.Context())
+	uid := middleware.GetUserUID(r.Context())
 	if uid == "" {
 		return false
 	}
@@ -90,7 +91,7 @@ func SaveHandler(w http.ResponseWriter, r *http.Request) {
 
 func ShareHandler(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	uid := lib.GetUserUID(r.Context())
+	uid := middleware.GetUserUID(r.Context())
 
 	var ownerId string
 	var existingSlug sql.NullString
@@ -205,7 +206,7 @@ func SaveFileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	fileSize := int64(len(blob))
 
-	uid := lib.GetUserUID(r.Context())
+	uid := middleware.GetUserUID(r.Context())
 
 	// Check quota (unless unlimited).
 	tx, err := lib.DB.BeginTx(r.Context(), nil)
@@ -285,7 +286,7 @@ func DeleteFileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	uid := lib.GetUserUID(r.Context())
+	uid := middleware.GetUserUID(r.Context())
 
 	tx, err := lib.DB.BeginTx(r.Context(), nil)
 	if err != nil {
@@ -334,7 +335,7 @@ func PublicEditHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Gate: only VIP-whitelisted users can toggle public edit.
-	email := lib.GetUserEmail(r.Context())
+	email := middleware.GetUserEmail(r.Context())
 	var vipCount int
 	_ = lib.DB.QueryRowContext(r.Context(),
 		`SELECT COUNT(*) FROM feature_whitelist WHERE email = ?`, email,
@@ -375,7 +376,7 @@ func DeleteHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	uid := lib.GetUserUID(r.Context())
+	uid := middleware.GetUserUID(r.Context())
 
 	tx, err := lib.DB.BeginTx(r.Context(), nil)
 	if err != nil {
@@ -500,7 +501,7 @@ func ServeFileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Access control: owner of the drawing OR a publicly shared drawing.
-	uid := lib.GetUserUID(r.Context())
+	uid := middleware.GetUserUID(r.Context())
 	var ownerID string
 	var shareSlug sql.NullString
 	_ = lib.DB.QueryRowContext(r.Context(),

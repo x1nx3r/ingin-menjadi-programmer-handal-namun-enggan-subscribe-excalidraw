@@ -11,6 +11,7 @@ import (
 	"gotth/app/api"
 	"gotth/app/assets"
 	"gotth/app/lib"
+	"gotth/app/middleware"
 )
 
 func getCSSHash() string {
@@ -64,7 +65,7 @@ func dashboardHandler(w http.ResponseWriter, r *http.Request) {
 		dbSize = formatBytes(uint64(fi.Size()))
 	}
 
-	rlReports := lib.RateLimitReports()
+	rlReports := middleware.RateLimitReports()
 	totalBlocked := int64(0)
 	for _, r := range rlReports {
 		totalBlocked += r.Hits

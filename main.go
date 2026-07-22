@@ -14,9 +14,11 @@ import (
 	"gotth/app/admin"
 	"gotth/app/api"
 	"gotth/app/assets"
+	"gotth/app/auth"
 	"gotth/app/canvas"
 	"gotth/app/dashboard"
 	"gotth/app/lib"
+	"gotth/app/middleware"
 	"gotth/app/profile"
 	_ "github.com/a-h/templ"
 )
@@ -55,27 +57,27 @@ func main() {
 	})))
 
 	// Auth
-	mux.Handle("POST /auth/login", lib.RateLimitAuth(lib.LoginHandler))
-	mux.HandleFunc("POST /auth/logout", lib.LogoutHandler)
-	mux.HandleFunc("GET /auth/user", lib.UserHandler)
+	mux.Handle("POST /auth/login", middleware.RateLimitAuth(auth.LoginHandler))
+	mux.HandleFunc("POST /auth/logout", auth.LogoutHandler)
+	mux.HandleFunc("GET /auth/user", auth.UserHandler)
 
 	// Pages
 	mux.HandleFunc("GET /{$}", app.PageHandler)
-	mux.Handle("GET /drawings", lib.RequireAuth(dashboard.PageHandler))
-	mux.Handle("POST /draw/new", lib.RequireAuth(dashboard.NewHandler))
-	mux.Handle("GET /draw/{id}", lib.RequireAuth(canvas.PageHandler))
-	mux.Handle("GET /profile", lib.RequireAuth(profile.PageHandler))
+	mux.Handle("GET /drawings", middleware.RequireAuth(dashboard.PageHandler))
+	mux.Handle("POST /draw/new", middleware.RequireAuth(dashboard.NewHandler))
+	mux.Handle("GET /draw/{id}", middleware.RequireAuth(canvas.PageHandler))
+	mux.Handle("GET /profile", middleware.RequireAuth(profile.PageHandler))
 
 	// API
-	mux.Handle("GET /api/draw/{id}/data", lib.RequireAuth(api.DataHandler))
-	mux.Handle("POST /api/draw/{id}/save", lib.RequireAuth(lib.RateLimitAPI(api.SaveHandler)))
-	mux.Handle("POST /api/draw/{id}/share", lib.RequireAuth(lib.RateLimitAPI(api.ShareHandler)))
-	mux.Handle("PUT /api/draw/{id}/rename", lib.RequireAuth(lib.RateLimitAPI(api.RenameHandler)))
-	mux.Handle("POST /api/draw/{id}/thumbnail", lib.RequireAuth(lib.RateLimitAPI(api.ThumbnailHandler)))
-	mux.Handle("PUT /api/draw/{id}/public-edit", lib.RequireAuth(lib.RateLimitAPI(api.PublicEditHandler)))
-	mux.Handle("POST /api/draw/{id}/file", lib.RequireAuth(lib.RateLimitAPI(api.SaveFileHandler)))
-	mux.Handle("DELETE /api/draw/{id}/file", lib.RequireAuth(lib.RateLimitAPI(api.DeleteFileHandler)))
-	mux.Handle("DELETE /api/draw/{id}", lib.RequireAuth(lib.RateLimitAPI(api.DeleteHandler)))
+	mux.Handle("GET /api/draw/{id}/data", middleware.RequireAuth(api.DataHandler))
+	mux.Handle("POST /api/draw/{id}/save", middleware.RequireAuth(middleware.RateLimitAPI(api.SaveHandler)))
+	mux.Handle("POST /api/draw/{id}/share", middleware.RequireAuth(middleware.RateLimitAPI(api.ShareHandler)))
+	mux.Handle("PUT /api/draw/{id}/rename", middleware.RequireAuth(middleware.RateLimitAPI(api.RenameHandler)))
+	mux.Handle("POST /api/draw/{id}/thumbnail", middleware.RequireAuth(middleware.RateLimitAPI(api.ThumbnailHandler)))
+	mux.Handle("PUT /api/draw/{id}/public-edit", middleware.RequireAuth(middleware.RateLimitAPI(api.PublicEditHandler)))
+	mux.Handle("POST /api/draw/{id}/file", middleware.RequireAuth(middleware.RateLimitAPI(api.SaveFileHandler)))
+	mux.Handle("DELETE /api/draw/{id}/file", middleware.RequireAuth(middleware.RateLimitAPI(api.DeleteFileHandler)))
+	mux.Handle("DELETE /api/draw/{id}", middleware.RequireAuth(middleware.RateLimitAPI(api.DeleteHandler)))
 
 	mux.HandleFunc("GET /shared/{slug}", canvas.SharedPageHandler)
 	mux.HandleFunc("GET /api/shared/{slug}/data", api.SharedDataHandler)
@@ -84,11 +86,11 @@ func main() {
 	mux.HandleFunc("GET /api/file/{drawingId}/{fileId}", api.ServeFileHandler)
 
 	// WebSocket routes
-	mux.Handle("GET /api/draw/{id}/ws", lib.RequireAuth(api.OwnerWSHandler))
-	mux.Handle("GET /api/draw/{id}/collab-status", lib.RequireAuth(api.CollabStatusHandler))
-	mux.Handle("GET /api/draw/{id}/collab-events", lib.RequireAuth(api.CollabEventsHandler))
+	mux.Handle("GET /api/draw/{id}/ws", middleware.RequireAuth(api.OwnerWSHandler))
+	mux.Handle("GET /api/draw/{id}/collab-status", middleware.RequireAuth(api.CollabStatusHandler))
+	mux.Handle("GET /api/draw/{id}/collab-events", middleware.RequireAuth(api.CollabEventsHandler))
 	mux.HandleFunc("GET /api/shared/{slug}/ws", api.GuestWSHandler)
-	mux.Handle("GET /api/ws/stats", lib.RequireSuperAdmin(http.HandlerFunc(api.WsStatsHandler)))
+	mux.Handle("GET /api/ws/stats", middleware.RequireSuperAdmin(http.HandlerFunc(api.WsStatsHandler)))
 
 	// SEO: robots.txt
 	mux.HandleFunc("GET /robots.txt", func(w http.ResponseWriter, r *http.Request) {
@@ -118,10 +120,10 @@ func main() {
 	adminMux.HandleFunc("POST /admin/vip/add", admin.AddHandler)
 	adminMux.HandleFunc("DELETE /admin/vip/remove", admin.RemoveHandler)
 	adminMux.HandleFunc("POST /admin/users/storage-unlimited-toggle", admin.PageHandler)
-	mux.Handle("/admin/", lib.RequireSuperAdmin(adminMux))
+	mux.Handle("/admin/", middleware.RequireSuperAdmin(adminMux))
 
 	// Middleware
-	wrapped := lib.Middleware(mux)
+	wrapped := middleware.Middleware(mux)
 
 	port := os.Getenv("PORT")
 	if port == "" {

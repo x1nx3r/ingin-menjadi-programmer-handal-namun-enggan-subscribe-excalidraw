@@ -1,10 +1,12 @@
-package lib
+package auth
 
 import (
 	"log"
 	"net/http"
 
 	"gotth/app/components"
+	"gotth/app/lib"
+	"gotth/app/middleware"
 )
 
 func isHTTPS(r *http.Request) bool {
@@ -27,7 +29,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	sessionCookie, err := FirebaseAuth.SessionCookie(ctx, idToken, 14*24*60*60*1e9)
+	sessionCookie, err := lib.FirebaseAuth.SessionCookie(ctx, idToken, 14*24*60*60*1e9)
 	if err != nil {
 		log.Printf("session cookie creation: %v", err)
 		http.Error(w, "auth failed", http.StatusUnauthorized)
@@ -50,10 +52,9 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func LogoutHandler(w http.ResponseWriter, r *http.Request) {
-	uid := GetUserUID(r.Context())
+	uid := middleware.GetUserUID(r.Context())
 	if uid != "" {
-		ctx := r.Context()
-		_ = FirebaseAuth.RevokeRefreshTokens(ctx, uid)
+		_ = lib.FirebaseAuth.RevokeRefreshTokens(r.Context(), uid)
 	}
 
 	http.SetCookie(w, &http.Cookie{
@@ -68,12 +69,11 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html")
 	w.Header().Set("HX-Redirect", "/")
-	// Page redirects immediately; auth bar swap is cosmetic only.
 	w.Write([]byte(`<div id="auth-bar" hx-swap-oob="true"></div>`))
 }
 
 func UserHandler(w http.ResponseWriter, r *http.Request) {
-	uid := GetUserUID(r.Context())
+	uid := middleware.GetUserUID(r.Context())
 
 	w.Header().Set("Content-Type", "text/html")
 	if uid == "" {
@@ -82,7 +82,7 @@ func UserHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := FirebaseAuth.GetUser(r.Context(), uid)
+	user, err := lib.FirebaseAuth.GetUser(r.Context(), uid)
 	if err != nil {
 		log.Printf("get user: %v", err)
 		components.SignInBarDesktop().Render(r.Context(), w)
