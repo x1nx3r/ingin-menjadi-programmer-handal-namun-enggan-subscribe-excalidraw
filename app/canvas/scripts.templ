@@ -1,0 +1,674 @@
+package canvas
+
+// CanvasOwnerScript renders the full Excalidraw owner canvas logic.
+// Reads drawing ID from data-drawing-id on #canvas-mount — no Go values injected.
+// Must be placed after excalidraw.bundle.js in the body.
+templ CanvasOwnerScript() {
+	<script>
+		function toggleTheme() {
+			var isDark = document.documentElement.classList.toggle('dark');
+			localStorage.setItem('theme', isDark ? 'dark' : 'light');
+			if (window.excalidrawAPI) {
+				window.excalidrawAPI.updateScene({ appState: { theme: isDark ? 'dark' : 'light' } });
+			}
+		}
+		(function() {
+			var id = document.getElementById('canvas-mount').dataset.drawingId;
+			var mount = document.getElementById('canvas-mount');
+			var _dirty = false;
+			var _scene = null;
+			var _collaborators = new Map();
+			var _sceneElements = [];
+			var _lastSceneVersion = -1;
+			var _uploadedFiles = new Set();
+			var _saving = false;
+			var _saveTimer = null;
+			var _saveWorker = new Worker(URL.createObjectURL(new Blob(['self.onmessage=function(e){self.postMessage(JSON.stringify(e.data))}'],{type:'application/javascript'})));
+			_saveWorker.onmessage = function(e) {
+				fetch('/api/draw/' + id + '/save', {
+					method: 'POST',
+					body: e.data
+				}).then(function() {
+					_saving = false;
+					generateThumbnail(_scene.elements, _scene.appState);
+					if (_dirty) doSave();
+				}).catch(function(e) {
+					console.error('Save error:', e);
+					_saving = false;
+				});
+			};
+
+			var _ws = null;
+			var _collabMode = false;
+			var _eventSource = null;
+			var _wsSendQueue = [];
+			var _broadcastTimer = null;
+
+			function fetchMissingFiles(elements, api) {
+				var missing = [];
+				elements.forEach(function(el) {
+					if (el.type === 'image' && el.fileId && !_uploadedFiles.has(el.fileId)) {
+						missing.push(el.fileId);
+					}
+				});
+				if (missing.length === 0) return;
+				var now = Date.now();
+				Promise.all(missing.map(function(fid) {
+					return fetch('/api/file/' + id + '/' + fid)
+						.then(function(r) { return r.blob(); })
+						.then(function(blob) {
+							return new Promise(function(resolve) {
+								var reader = new FileReader();
+								reader.onload = function() {
+									resolve({
+										id: fid,
+										mimeType: blob.type || 'image/webp',
+										dataURL: reader.result,
+										created: now,
+										lastRetrieved: now
+									});
+								};
+								reader.readAsDataURL(blob);
+							});
+						});
+				})).then(function(entries) {
+					var fileMap = {};
+					entries.forEach(function(e) { _uploadedFiles.add(e.id); fileMap[e.id] = e; });
+					api.addFiles(fileMap);
+				}).catch(function(e) { console.error('Fetch missing files:', e); });
+			}
+
+			function handleRemoteScene(remoteElements) {
+				if (!window.excalidrawAPI) return;
+				var api = window.excalidrawAPI;
+				fetchMissingFiles(remoteElements, api);
+				var appState = api.getAppState();
+				var existing = _sceneElements.length > 0 ? _sceneElements : api.getSceneElements();
+				var Bundle = window.ExcalidrawBundle;
+				var restored = Bundle.restoreElements(remoteElements, existing);
+				var reconciled = Bundle.reconcileElements(existing, restored, appState);
+				reconciled = Bundle.bumpElementVersions(reconciled, existing);
+				_lastSceneVersion = Bundle.getSceneVersion(reconciled);
+				_sceneElements = reconciled;
+				api.updateScene({ elements: reconciled, captureUpdate: Bundle.CaptureUpdateAction.NEVER });
+			}
+
+			function connectSSE() {
+				if (_eventSource) return;
+				_eventSource = new EventSource('/api/draw/' + id + '/collab-events');
+				_eventSource.addEventListener('count', function(e) {
+					if (!_collabMode && parseInt(e.data) > 0) upgradeToCollab();
+				});
+				_eventSource.onerror = function() {
+					_eventSource.close();
+					_eventSource = null;
+					setTimeout(connectSSE, 2000);
+				};
+			}
+
+			function upgradeToCollab() {
+				if (_collabMode) return;
+				_collabMode = true;
+				connectWS();
+			}
+
+			function downgradeToSolo() {
+				if (!_collabMode) return;
+				_collabMode = false;
+				if (_broadcastTimer) {
+					clearTimeout(_broadcastTimer);
+					_broadcastTimer = null;
+					flushBroadcast();
+				}
+				if (_ws) {
+					_ws.onclose = null;
+					_ws.close();
+					_ws = null;
+				}
+				if (_dirty && _scene) doSave();
+			}
+
+			function flushBroadcast() {
+				if (_ws && _ws.readyState === WebSocket.OPEN && _sceneElements.length > 0) {
+					_ws.send(JSON.stringify({
+						type: 'SCENE_UPDATE',
+						payload: { elements: _sceneElements }
+					}));
+				}
+			}
+
+			function wsSend(msg) {
+				if (_ws && _ws.readyState === WebSocket.OPEN) {
+					_ws.send(msg);
+				} else if (_ws && _ws.readyState === WebSocket.CONNECTING) {
+					_wsSendQueue.push(msg);
+				}
+			}
+
+			function connectWS() {
+				var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+				_ws = new WebSocket(proto + '//' + location.host + '/api/draw/' + id + '/ws');
+				_ws.onopen = function() {
+					while (_wsSendQueue.length > 0) {
+						_ws.send(_wsSendQueue.shift());
+					}
+					if (_sceneElements.length > 0) {
+						_ws.send(JSON.stringify({
+							type: 'SCENE_UPDATE',
+							payload: { elements: _sceneElements }
+						}));
+					}
+				};
+				_ws.onmessage = function(event) {
+					try {
+						var payload = JSON.parse(event.data);
+						if (payload.type === 'COLLAB_ENDED') {
+							downgradeToSolo();
+						} else if (payload.type === 'SCENE_INIT' || payload.type === 'SCENE_UPDATE') {
+							handleRemoteScene(payload.payload.elements || []);
+						} else if (payload.type === 'MOUSE_LOCATION' && payload.payload && payload.payload.clientId && window.excalidrawAPI) {
+							_collaborators.set(payload.payload.clientId, {
+								pointer: payload.payload.pointer,
+								username: payload.payload.username || 'Guest'
+							});
+							window.excalidrawAPI.updateScene({ collaborators: new Map(_collaborators) });
+						}
+					} catch(e) { console.error('[ws] onmessage error:', e); }
+				};
+				_ws.onclose = function() {
+					if (_collabMode) {
+						connectSSE();
+					}
+				};
+				_ws.onerror = function() { _ws.close(); };
+			}
+
+			var Bundle = window.ExcalidrawBundle;
+			var React = Bundle.React;
+			var ReactDOM = Bundle.ReactDOM;
+			var Excalidraw = Bundle.Excalidraw;
+			var getSceneVersion = Bundle.getSceneVersion;
+
+			new ResizeObserver(function() {
+				window.dispatchEvent(new Event('resize'));
+			}).observe(mount);
+
+			var root = ReactDOM.createRoot(mount);
+			root.render(React.createElement(Excalidraw, {
+				excalidrawAPI: function(api) {
+					window.excalidrawAPI = api;
+					fetch('/api/draw/' + id + '/data')
+						.then(function(r) { return r.json(); })
+						.then(function(data) {
+							if (!data || !data.elements) {
+								connectSSE();
+								return;
+							}
+							_lastSceneVersion = getSceneVersion(data.elements);
+							if (data.files && data.files.length > 0) {
+								var now = Date.now();
+								return Promise.all(data.files.map(function(f) {
+									_uploadedFiles.add(f.id);
+									return fetch('/api/file/' + id + '/' + f.id)
+										.then(function(r) { return r.blob(); })
+										.then(function(blob) {
+											return new Promise(function(resolve) {
+												var reader = new FileReader();
+												reader.onload = function() {
+													resolve({
+														id: f.id,
+														mimeType: f.mimeType,
+														dataURL: reader.result,
+														created: now,
+														lastRetrieved: now
+													});
+												};
+												reader.readAsDataURL(blob);
+											});
+										});
+								})).then(function(entries) {
+									var fileMap = {};
+									entries.forEach(function(e) { fileMap[e.id] = e; });
+									api.addFiles(fileMap);
+									api.updateScene({ elements: data.elements, appState: data.appState });
+									connectSSE();
+								});
+							}
+							api.updateScene({ elements: data.elements, appState: data.appState });
+							connectSSE();
+						})
+						.catch(function(e) {
+							console.error('Load error:', e);
+							connectSSE();
+						});
+				},
+				onChange: function(elements, appState, files) {
+					_sceneElements = elements;
+					_scene = { elements: elements, appState: appState };
+					_dirty = true;
+					var version = getSceneVersion(elements);
+					if (version > _lastSceneVersion) {
+						_lastSceneVersion = version;
+						if (_collabMode && _ws) {
+							if (_broadcastTimer) clearTimeout(_broadcastTimer);
+							_broadcastTimer = setTimeout(function() {
+								_broadcastTimer = null;
+								wsSend(JSON.stringify({
+									type: 'SCENE_UPDATE',
+									payload: { elements: _sceneElements }
+								}));
+							}, 150);
+						}
+					}
+					if (files) {
+						Object.keys(files).forEach(function(fid) {
+							if (_uploadedFiles.has(fid)) return;
+							var f = files[fid];
+							uploadFile(fid, f.mimeType, f.dataURL);
+						});
+					}
+					if (_saveTimer) clearTimeout(_saveTimer);
+					_saveTimer = setTimeout(doSave, 2000);
+				},
+				onPointerUpdate: function(payload) {
+					if (_collabMode && _ws && payload.pointer) {
+						wsSend(JSON.stringify({
+							type: 'MOUSE_LOCATION',
+							payload: {
+								clientId: 'owner-' + id,
+								username: 'Owner',
+								pointer: payload.pointer
+							}
+						}));
+					}
+				},
+				theme: document.documentElement.classList.contains('dark') ? 'dark' : 'light',
+				viewModeEnabled: false,
+				zenModeEnabled: false,
+				gridModeEnabled: false,
+				name: "IMPHISE"
+			}));
+
+			var observer = new MutationObserver(function() {
+				if (window.excalidrawAPI) {
+					var isDark = document.documentElement.classList.contains('dark');
+					window.excalidrawAPI.updateScene({ appState: { theme: isDark ? 'dark' : 'light' } });
+				}
+			});
+			observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+			window.drawingId = id;
+
+			window.uploadFile = function(fileId, mimeType, dataURL) {
+				if (mimeType === 'image/svg+xml') {
+					fetch(dataURL).then(function(r) { return r.blob(); }).then(function(blob) {
+						return fetch('/api/draw/' + id + '/file?fileId=' + fileId, {
+							method: 'POST',
+							headers: { 'Content-Type': 'image/svg+xml' },
+							body: blob
+						});
+					}).then(function(r) {
+						if (r.ok) _uploadedFiles.add(fileId);
+					}).catch(function(e) {
+						console.error('File upload error:', e);
+					});
+					return;
+				}
+				var img = new Image();
+				img.onload = function() {
+					var c = document.createElement('canvas');
+					c.width = img.naturalWidth;
+					c.height = img.naturalHeight;
+					c.getContext('2d').drawImage(img, 0, 0);
+					c.toBlob(function(blob) {
+						if (!blob) return;
+						fetch('/api/draw/' + id + '/file?fileId=' + fileId, {
+							method: 'POST',
+							headers: { 'Content-Type': 'image/webp' },
+							body: blob
+						}).then(function(r) {
+							if (r.ok) _uploadedFiles.add(fileId);
+						}).catch(function(e) {
+							console.error('File upload error:', e);
+						});
+					}, 'image/webp', 0.85);
+				};
+				img.onerror = function() { _uploadedFiles.add(fileId); };
+				img.src = dataURL;
+			};
+
+			window.generateThumbnail = function(elements, appState) {
+				var exportToBlob = window.ExcalidrawBundle.exportToBlob;
+				if (!exportToBlob) return;
+				exportToBlob({ elements: elements, appState: appState, mimeType: "image/png" })
+					.then(function(blob) {
+						if (blob.size > 102400) return;
+						var reader = new FileReader();
+						reader.onload = function() {
+							fetch('/api/draw/' + id + '/thumbnail', {
+								method: 'POST',
+								body: reader.result
+							}).catch(function() {});
+						};
+						reader.readAsDataURL(blob);
+					}).catch(function() {});
+			};
+
+			function doSave() {
+				if (_collabMode || _saving) return;
+				if (!_dirty || !_scene) return;
+				_dirty = false;
+				_saving = true;
+				_saveWorker.postMessage(_scene);
+			}
+
+			window.addEventListener('beforeunload', function() {
+				if (!_dirty || !_scene) return;
+				if (_broadcastTimer) {
+					clearTimeout(_broadcastTimer);
+					_broadcastTimer = null;
+				}
+				flushBroadcast();
+				navigator.sendBeacon(
+					'/api/draw/' + id + '/save',
+					new Blob([JSON.stringify(_scene)], { type: 'application/json' })
+				);
+			});
+
+			window.saveDrawing = function() { doSave(); };
+
+			window.renameDrawing = function(newTitle) {
+				fetch('/api/draw/' + id + '/rename', {
+					method: 'PUT',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ title: newTitle })
+				}).catch(function(e) { console.error('Rename error:', e); });
+			};
+
+			window.shareSlug = null;
+
+			window.shareDrawing = function() {
+				if (window.shareSlug) {
+					showShareDialog(window.shareSlug);
+					return;
+				}
+				fetch('/api/draw/' + id + '/share', { method: 'POST' })
+					.then(function(r) { return r.json(); })
+					.then(function(data) {
+						window.shareSlug = data.slug;
+						showShareDialog(data.slug);
+					})
+					.catch(function(e) { console.error('Share error:', e); });
+			};
+
+			window.showShareDialog = function(slug) {
+				var link = window.location.origin + '/shared/' + slug;
+				document.getElementById('share-link').value = link;
+				document.getElementById('share-dialog').classList.remove('hidden');
+				document.getElementById('share-dialog').classList.add('flex');
+				fetch('/api/shared/' + slug + '/data')
+					.then(function(r) { return r.json(); })
+					.then(function(data) { setCollabToggle(data.allowPublicEdits === true); })
+					.catch(function() {});
+			};
+
+			window.setCollabToggle = function(enabled) {
+				var btn = document.getElementById('collab-toggle');
+				btn.dataset.enabled = enabled ? 'true' : 'false';
+				btn.textContent = enabled ? 'On' : 'Off';
+				btn.style.color = enabled ? 'var(--accent)' : '';
+			};
+
+			window.togglePublicEdit = function() {
+				var btn = document.getElementById('collab-toggle');
+				var enabled = btn.dataset.enabled !== 'true';
+				fetch('/api/draw/' + id + '/public-edit', {
+					method: 'PUT',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ enabled: enabled })
+				}).then(function() {
+					setCollabToggle(enabled);
+				}).catch(function(e) { console.error('Toggle error:', e); });
+			};
+
+			window.closeShare = function() {
+				document.getElementById('share-dialog').classList.add('hidden');
+				document.getElementById('share-dialog').classList.remove('flex');
+			};
+
+			window.copyShareLink = function() {
+				var input = document.getElementById('share-link');
+				input.select();
+				navigator.clipboard.writeText(input.value).catch(function() {});
+			};
+		})();
+	</script>
+}
+
+// CanvasGuestScript renders the Excalidraw guest/shared canvas logic.
+// Reads slug and allowPublicEdits from data-* attributes on #canvas-mount.
+// Must be placed after excalidraw.bundle.js in the body.
+templ CanvasGuestScript() {
+	<script>
+		(function() {
+			var mount = document.getElementById('canvas-mount');
+			var slug = mount.dataset.slug;
+			var allowPublicEdits = mount.dataset.allowPublicEdits === 'true';
+
+			var _api = null;
+			var _collaborators = new Map();
+
+			var _clientId = sessionStorage.getItem('collab_client_id');
+			if (!_clientId) {
+				_clientId = (Date.now().toString(36) + Math.random().toString(36).slice(2));
+				sessionStorage.setItem('collab_client_id', _clientId);
+			}
+			var _username = sessionStorage.getItem('collab_username') || null;
+
+			var _lastSceneVersion = -1;
+			var _sceneElements = [];
+			var _uploadedFiles = new Set();
+			var _drawingId = null;
+
+			var _ws = null;
+			var _broadcastTimer = null;
+
+			function fetchMissingFiles(elements, api) {
+				var missing = [];
+				elements.forEach(function(el) {
+					if (el.type === 'image' && el.fileId && !_uploadedFiles.has(el.fileId)) {
+						missing.push(el.fileId);
+					}
+				});
+				if (missing.length === 0 || !_drawingId) return;
+				var now = Date.now();
+				Promise.all(missing.map(function(fid) {
+					return fetch('/api/file/' + _drawingId + '/' + fid)
+						.then(function(r) { return r.blob(); })
+						.then(function(blob) {
+							return new Promise(function(resolve) {
+								var reader = new FileReader();
+								reader.onload = function() {
+									resolve({
+										id: fid,
+										mimeType: blob.type || 'image/webp',
+										dataURL: reader.result,
+										created: now,
+										lastRetrieved: now
+									});
+								};
+								reader.readAsDataURL(blob);
+							});
+						});
+				})).then(function(entries) {
+					var fileMap = {};
+					entries.forEach(function(e) { _uploadedFiles.add(e.id); fileMap[e.id] = e; });
+					api.addFiles(fileMap);
+				}).catch(function(e) { console.error('Fetch missing files:', e); });
+			}
+
+			function handleRemoteScene(remoteElements) {
+				if (!_api) return;
+				fetchMissingFiles(remoteElements, _api);
+				var appState = _api.getAppState();
+				var existing = _sceneElements.length > 0 ? _sceneElements : _api.getSceneElements();
+				var Bundle = window.ExcalidrawBundle;
+				var restored = Bundle.restoreElements(remoteElements, existing);
+				var reconciled = Bundle.reconcileElements(existing, restored, appState);
+				reconciled = Bundle.bumpElementVersions(reconciled, existing);
+				_lastSceneVersion = Bundle.getSceneVersion(reconciled);
+				_sceneElements = reconciled;
+				_api.updateScene({ elements: reconciled, captureUpdate: Bundle.CaptureUpdateAction.NEVER });
+			}
+
+			function connectWS() {
+				var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+				_ws = new WebSocket(proto + '//' + location.host + '/api/shared/' + slug + '/ws');
+				_ws.onmessage = function(event) {
+					try {
+						var payload = JSON.parse(event.data);
+						if (payload.type === 'SCENE_INIT' || payload.type === 'SCENE_UPDATE') {
+							handleRemoteScene(payload.payload.elements || []);
+						} else if (payload.type === 'MOUSE_LOCATION' && payload.payload && payload.payload.clientId && payload.payload.clientId !== _clientId && _api) {
+							_collaborators.set(payload.payload.clientId, {
+								pointer: payload.payload.pointer,
+								username: payload.payload.username || 'Guest'
+							});
+							_api.updateScene({ collaborators: new Map(_collaborators) });
+						}
+					} catch(e) { console.error('[ws] onmessage error:', e); }
+				};
+				_ws.onclose = function() {
+					setTimeout(connectWS, 1000 + Math.random() * 2000);
+				};
+				_ws.onerror = function() { _ws.close(); };
+			}
+
+			window.joinSession = function() {
+				var input = document.getElementById('username-input');
+				var name = (input ? input.value : '').trim();
+				if (!name) { if (input) input.focus(); return; }
+				_username = name;
+				sessionStorage.setItem('collab_username', name);
+				var prompt = document.getElementById('name-prompt');
+				if (prompt) { prompt.classList.add('hidden'); }
+			};
+
+			if (allowPublicEdits && _username) {
+				var prompt = document.getElementById('name-prompt');
+				if (prompt) { prompt.classList.add('hidden'); }
+			}
+
+			var nameInput = document.getElementById('username-input');
+			if (nameInput) {
+				nameInput.addEventListener('keydown', function(e) {
+					if (e.key === 'Enter') { window.joinSession(); }
+				});
+			}
+
+			var React = window.ExcalidrawBundle.React;
+			var ReactDOM = window.ExcalidrawBundle.ReactDOM;
+			var Excalidraw = window.ExcalidrawBundle.Excalidraw;
+			var Bundle = window.ExcalidrawBundle;
+			var getSceneVersion = Bundle.getSceneVersion;
+
+			new ResizeObserver(function() {
+				if (_api) window.dispatchEvent(new Event('resize'));
+			}).observe(mount);
+
+			var excalidrawProps = {
+				viewModeEnabled: !allowPublicEdits,
+				theme: document.documentElement.classList.contains('dark') ? 'dark' : 'light',
+				excalidrawAPI: function(api) {
+					_api = api;
+					fetch('/api/shared/' + slug + '/data')
+						.then(function(r) { return r.json(); })
+						.then(function(data) {
+							if (!data || !data.elements) {
+								connectWS();
+								return;
+							}
+							if (data.drawingId) _drawingId = data.drawingId;
+							_lastSceneVersion = getSceneVersion(data.elements);
+							if (data.files && data.files.length > 0 && _drawingId) {
+								var now = Date.now();
+								Promise.all(data.files.map(function(f) {
+									return fetch('/api/file/' + _drawingId + '/' + f.id)
+										.then(function(r) { return r.blob(); })
+										.then(function(blob) {
+											return new Promise(function(resolve) {
+												var reader = new FileReader();
+												reader.onload = function() {
+													resolve({
+														id: f.id,
+														mimeType: f.mimeType,
+														dataURL: reader.result,
+														created: now,
+														lastRetrieved: now
+													});
+												};
+												reader.readAsDataURL(blob);
+											});
+										});
+								})).then(function(entries) {
+									var fileMap = {};
+									entries.forEach(function(e) { fileMap[e.id] = e; });
+									_api.addFiles(fileMap);
+									_api.updateScene({
+										elements: data.elements,
+										appState: Object.assign({}, data.appState, { viewModeEnabled: !allowPublicEdits })
+									});
+									connectWS();
+								});
+							} else {
+								_api.updateScene({
+									elements: data.elements,
+									appState: Object.assign({}, data.appState, { viewModeEnabled: !allowPublicEdits })
+								});
+								connectWS();
+							}
+						})
+						.catch(function(e) {
+							console.error('Load error:', e);
+							connectWS();
+						});
+				}
+			};
+
+			if (allowPublicEdits) {
+				excalidrawProps.onChange = function(elements, appState) {
+					_sceneElements = elements;
+					var version = getSceneVersion(elements);
+					if (version > _lastSceneVersion) {
+						_lastSceneVersion = version;
+						if (_ws && _ws.readyState === WebSocket.OPEN && _username) {
+							if (_broadcastTimer) clearTimeout(_broadcastTimer);
+							_broadcastTimer = setTimeout(function() {
+								_broadcastTimer = null;
+								_ws.send(JSON.stringify({
+									type: 'SCENE_UPDATE',
+									payload: { elements: _sceneElements }
+								}));
+							}, 150);
+						}
+					}
+				};
+
+				excalidrawProps.onPointerUpdate = function(payload) {
+					if (_ws && _ws.readyState === WebSocket.OPEN && _username && payload.pointer) {
+						_ws.send(JSON.stringify({
+							type: 'MOUSE_LOCATION',
+							payload: {
+								clientId: _clientId,
+								username: _username,
+								pointer: payload.pointer
+							}
+						}));
+					}
+				};
+			}
+
+			var root = ReactDOM.createRoot(mount);
+			root.render(React.createElement(Excalidraw, excalidrawProps));
+		})();
+	</script>
+}

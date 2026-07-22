@@ -13,29 +13,7 @@ templ Navigation(currentPath string, autoHide bool) {
 	} else {
 		@navHeader(currentPath)
 	}
-	<script>
-		function toggleTheme() {
-			var isDark = document.documentElement.classList.toggle('dark');
-			localStorage.setItem('theme', isDark ? 'dark' : 'light');
-			if (window.excalidrawAPI) {
-				window.excalidrawAPI.updateScene({ appState: { theme: isDark ? 'dark' : 'light' } });
-			}
-		}
-		function toggleMobileMenu() {
-			var menu = document.getElementById('mobile-menu');
-			if (!menu) return;
-			var isHidden = menu.classList.contains('hidden');
-			if (isHidden) {
-				menu.classList.remove('hidden');
-			} else {
-				menu.classList.add('hidden');
-			}
-		}
-		function closeMobileMenu() {
-			var menu = document.getElementById('mobile-menu');
-			if (menu) menu.classList.add('hidden');
-		}
-	</script>
+	@NavScript()
 }
 
 templ navHeader(currentPath string) {

@@ -1,0 +1,79 @@
+package components
+
+// HTMXScript loads HTMX from the CDN.
+// Single source of truth for the version and integrity hash —
+// update here and all three layouts pick it up automatically.
+templ HTMXScript() {
+	<script src="https://unpkg.com/htmx.org@2.0.4" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous"></script>
+}
+
+// ThemeInitScript renders the blocking theme initializer.
+// Must be placed in <head> before any paint — prevents flash of unstyled content
+// when the user's system preference or stored preference is dark mode.
+templ ThemeInitScript() {
+	<script>
+		(function() {
+			var t = localStorage.getItem('theme');
+			if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+				document.documentElement.classList.add('dark');
+			}
+		})();
+	</script>
+}
+
+// NavScript renders the navigation helper functions used across layouts.
+// Included once per page — templ.Once() ensures no double-render if called
+// from both a layout and a component on the same page.
+templ NavScript() {
+	<script>
+		function toggleTheme() {
+			var isDark = document.documentElement.classList.toggle('dark');
+			localStorage.setItem('theme', isDark ? 'dark' : 'light');
+			if (window.excalidrawAPI) {
+				window.excalidrawAPI.updateScene({ appState: { theme: isDark ? 'dark' : 'light' } });
+			}
+		}
+		function toggleMobileMenu() {
+			var menu = document.getElementById('mobile-menu');
+			if (!menu) return;
+			if (menu.classList.contains('hidden')) {
+				menu.classList.remove('hidden');
+			} else {
+				menu.classList.add('hidden');
+			}
+		}
+		function closeMobileMenu() {
+			var menu = document.getElementById('mobile-menu');
+			if (menu) menu.classList.add('hidden');
+		}
+	</script>
+}
+
+// FirebaseScript loads the Firebase compat SDKs and initialises the app.
+// Also defines window.signInWithGoogle for the sign-in button.
+// Only used in the main Layout — canvas pages don't need Firebase.
+templ FirebaseScript() {
+	<script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-app-compat.js"></script>
+	<script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-auth-compat.js"></script>
+	<script>
+		firebase.initializeApp({
+			apiKey: "AIzaSyC4uHw6X_ugSXKqVEiio3y24LqTPTPD27w",
+			authDomain: "canvas-78802.firebaseapp.com",
+			projectId: "canvas-78802",
+			storageBucket: "canvas-78802.firebasestorage.app",
+			messagingSenderId: "384877248276",
+			appId: "1:384877248276:web:61d08dffd5f19d0f358c01",
+		});
+
+		window.signInWithGoogle = async function() {
+			const provider = new firebase.auth.GoogleAuthProvider();
+			try {
+				const result = await firebase.auth().signInWithPopup(provider);
+				const token = await result.user.getIdToken();
+				htmx.ajax('POST', '/auth/login', { values: { idToken: token } });
+			} catch (e) {
+				console.error('Auth error:', e);
+			}
+		};
+	</script>
+}

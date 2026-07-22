@@ -76,37 +76,9 @@ templ Layout(title string, currentPath string, meta ...PageMeta) {
 			<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"/>
 			<link href="https://fonts.googleapis.com/css2?family=Bungee&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
 			<link rel="stylesheet" href={ "/globals.css?v=" + assets.CSSHash }/>
-			<script src="https://unpkg.com/htmx.org@2.0.4" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous"></script>
-			<script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-app-compat.js"></script>
-			<script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-auth-compat.js"></script>
-			<script>
-				firebase.initializeApp({
-					apiKey: "AIzaSyC4uHw6X_ugSXKqVEiio3y24LqTPTPD27w",
-					authDomain: "canvas-78802.firebaseapp.com",
-					projectId: "canvas-78802",
-					storageBucket: "canvas-78802.firebasestorage.app",
-					messagingSenderId: "384877248276",
-					appId: "1:384877248276:web:61d08dffd5f19d0f358c01",
-				});
-
-				window.signInWithGoogle = async function() {
-					const provider = new firebase.auth.GoogleAuthProvider();
-					try {
-						const result = await firebase.auth().signInWithPopup(provider);
-						const token = await result.user.getIdToken();
-						htmx.ajax('POST', '/auth/login', {values: {idToken: token}});
-					} catch (e) {
-						console.error('Auth error:', e);
-					}
-				};
-
-				(function() {
-					var t = localStorage.getItem('theme');
-					if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-						document.documentElement.classList.add('dark');
-					}
-				})();
-			</script>
+			@components.HTMXScript()
+			@components.ThemeInitScript()
+			@components.FirebaseScript()
 		</head>
 		<body hx-boost="true" hx-swap="innerHTML transition:true" class="min-h-full flex flex-col bg-[var(--bg)] text-[var(--fg)] antialiased">
 			@components.Navigation(currentPath, false)

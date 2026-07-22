@@ -5,7 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"gotth/app/lib"
+	"gotth/app/components"
+	"gotth/app/middleware"
 )
 
 type WhitelistEntry struct {
@@ -68,19 +69,9 @@ templ AdminLayout(title string, currentPath string) {
 			<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"/>
 			<link href="https://fonts.googleapis.com/css2?family=Bungee&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
 			<link rel="stylesheet" href={ "/globals.css?v=" + getCSSHash() }/>
-			<script src="https://unpkg.com/htmx.org@2.0.4" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous"></script>
-		<script>
-			(function() {
-				var t = localStorage.getItem('theme');
-				if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-					document.documentElement.classList.add('dark');
-				}
-			})();
-			function toggleTheme() {
-				var isDark = document.documentElement.classList.toggle('dark');
-				localStorage.setItem('theme', isDark ? 'dark' : 'light');
-			}
-		</script>
+			@components.HTMXScript()
+			@components.ThemeInitScript()
+			@components.NavScript()
 		</head>
 		<body hx-boost="true" hx-swap="innerHTML transition:true" class="min-h-full flex bg-[var(--bg)] text-[var(--fg)] antialiased">
 			@AdminSidebar(currentPath)
@@ -140,7 +131,7 @@ templ StatCard(label string, value string) {
 	</div>
 }
 
-templ DashboardPage(stats DashboardStats, rlReports []lib.RateLimitReport) {
+templ DashboardPage(stats DashboardStats, rlReports []middleware.RateLimitReport) {
 	@AdminLayout("Dashboard", "/admin") {
 		<h1 class="text-lg font-bold font-heading uppercase tracking-wider mb-6">Dashboard</h1>
 		<div class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">

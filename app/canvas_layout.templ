@@ -1,6 +1,9 @@
 package app
 
-import "gotth/app/assets"
+import (
+	"gotth/app/assets"
+	"gotth/app/components"
+)
 
 templ CanvasLayout(title string, meta ...PageMeta) {
 	<!DOCTYPE html>
@@ -39,14 +42,7 @@ templ CanvasLayout(title string, meta ...PageMeta) {
 			<link rel="stylesheet" href={ "/globals.css?v=" + assets.CSSHash }/>
 			<link rel="stylesheet" href="/static/excalidraw.css"/>
 			<!-- <link rel="stylesheet" href="/static/excalidraw-brutalist.css"/> -->
-			<script>
-				(function() {
-					var t = localStorage.getItem('theme');
-					if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-						document.documentElement.classList.add('dark');
-					}
-				})();
-			</script>
+			@components.ThemeInitScript()
 		</head>
 		<body class="h-full bg-[var(--bg)] text-[var(--fg)] antialiased">
 			{ children... }
