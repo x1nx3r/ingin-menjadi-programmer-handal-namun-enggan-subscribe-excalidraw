@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -14,6 +15,8 @@ import (
 
 	"gotth/app/lib"
 	"gotth/app/middleware"
+
+	"github.com/mattn/go-sqlite3"
 )
 
 type sceneData struct {
@@ -76,12 +79,16 @@ func SaveHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = lib.DB.ExecContext(r.Context(),
+	res, err := lib.DB.ExecContext(r.Context(),
 		"UPDATE drawings SET content = ?, updated_at = ? WHERE id = ?",
 		string(body), time.Now(), id)
 	if err != nil {
 		log.Printf("save drawing %s: %v", id, err)
 		http.Error(w, "save failed", http.StatusInternalServerError)
+		return
+	}
+	if rows, _ := res.RowsAffected(); rows == 0 {
+		http.NotFound(w, r)
 		return
 	}
 
@@ -107,22 +114,35 @@ func ShareHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slug, err := generateSlug()
-	if err != nil {
-		http.Error(w, "slug generation failed", http.StatusInternalServerError)
-		return
-	}
+	// Retry on unique-constraint collisions (16 hex chars is usually unique,
+	// but a race or a very large database can collide).
+	const maxRetries = 5
+	var slug string
+	for i := 0; i < maxRetries; i++ {
+		slug, err = generateSlug()
+		if err != nil {
+			http.Error(w, "slug generation failed", http.StatusInternalServerError)
+			return
+		}
 
-	_, err = lib.DB.ExecContext(r.Context(),
-		"UPDATE drawings SET share_slug = ?, updated_at = ? WHERE id = ?",
-		slug, time.Now(), id)
-	if err != nil {
+		_, err = lib.DB.ExecContext(r.Context(),
+			"UPDATE drawings SET share_slug = ?, updated_at = ? WHERE id = ?",
+			slug, time.Now(), id)
+		if err == nil {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]string{"slug": slug})
+			return
+		}
+		var sqliteErr sqlite3.Error
+		if errors.As(err, &sqliteErr) && sqliteErr.Code == sqlite3.ErrConstraint {
+			log.Printf("share slug collision for drawing %s, retrying", id)
+			continue
+		}
 		http.Error(w, "share creation failed", http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"slug": slug})
+	http.Error(w, "share creation failed: too many collisions", http.StatusInternalServerError)
 }
 
 func RenameHandler(w http.ResponseWriter, r *http.Request) {
@@ -197,6 +217,10 @@ func SaveFileHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing Content-Type", http.StatusBadRequest)
 		return
 	}
+	if !lib.ValidateFileMIME(mimeType) {
+		http.Error(w, "unsupported file type", http.StatusUnsupportedMediaType)
+		return
+	}
 
 	r.Body = http.MaxBytesReader(w, r.Body, 10*1024*1024) // 10 MB limit
 	blob, err := io.ReadAll(r.Body)
@@ -207,6 +231,12 @@ func SaveFileHandler(w http.ResponseWriter, r *http.Request) {
 	fileSize := int64(len(blob))
 
 	uid := middleware.GetUserUID(r.Context())
+	storageID := lib.GenerateStorageID(id, fileID)
+	filePath := lib.StorageFilePath(id, storageID)
+	if filePath == "" {
+		http.Error(w, "invalid file path", http.StatusInternalServerError)
+		return
+	}
 
 	// Check quota (unless unlimited).
 	tx, err := lib.DB.BeginTx(r.Context(), nil)
@@ -225,28 +255,34 @@ func SaveFileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if maxBytes >= 0 && usedBytes+fileSize > maxBytes {
+	var oldSize int64
+	_ = tx.QueryRowContext(r.Context(),
+		`SELECT COALESCE(file_size, 0) FROM drawing_files WHERE drawing_id = ? AND id = ?`,
+		id, fileID,
+	).Scan(&oldSize)
+
+	if maxBytes >= 0 && usedBytes+fileSize-oldSize > maxBytes {
 		http.Error(w, "quota exceeded", http.StatusInsufficientStorage)
 		return
 	}
 
-	// Write to disk.
+	// Write to disk using the server-side storage_id, never the client fileId.
 	dir := filepath.Join(lib.StorageRoot(), id)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		log.Printf("mkdir files %s: %v", id, err)
 		http.Error(w, "server error", http.StatusInternalServerError)
 		return
 	}
-	if err := os.WriteFile(filepath.Join(dir, fileID), blob, 0644); err != nil {
-		log.Printf("write file %s/%s: %v", id, fileID, err)
+	if err := os.WriteFile(filePath, blob, 0644); err != nil {
+		log.Printf("write file %s/%s: %v", id, storageID, err)
 		http.Error(w, "server error", http.StatusInternalServerError)
 		return
 	}
 
 	// Insert DB row and update quota in the same transaction.
 	_, err = tx.ExecContext(r.Context(),
-		`INSERT OR REPLACE INTO drawing_files (id, drawing_id, owner_id, mime_type, file_size) VALUES (?, ?, ?, ?, ?)`,
-		fileID, id, uid, mimeType, fileSize,
+		`INSERT OR REPLACE INTO drawing_files (id, drawing_id, owner_id, storage_id, mime_type, file_size) VALUES (?, ?, ?, ?, ?, ?)`,
+		fileID, id, uid, storageID, lib.NormalizeFileMIME(mimeType), fileSize,
 	)
 	if err != nil {
 		log.Printf("insert drawing_file %s/%s: %v", id, fileID, err)
@@ -255,7 +291,8 @@ func SaveFileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_, err = tx.ExecContext(r.Context(),
-		`UPDATE users SET storage_used_bytes = storage_used_bytes + ? WHERE uid = ?`, fileSize, uid,
+		`UPDATE users SET storage_used_bytes = storage_used_bytes - ? + ? WHERE uid = ?`,
+		oldSize, fileSize, uid,
 	)
 	if err != nil {
 		log.Printf("update quota %s: %v", uid, err)
@@ -296,17 +333,20 @@ func DeleteFileHandler(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 
 	var fileSize int64
+	var storageID string
 	err = tx.QueryRowContext(r.Context(),
-		`DELETE FROM drawing_files WHERE drawing_id = ? AND id = ? AND owner_id = ? RETURNING file_size`,
+		`DELETE FROM drawing_files WHERE drawing_id = ? AND id = ? AND owner_id = ? RETURNING file_size, storage_id`,
 		id, fileID, uid,
-	).Scan(&fileSize)
+	).Scan(&fileSize, &storageID)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
 
-	// Remove from disk (best-effort).
-	os.Remove(filepath.Join(lib.StorageRoot(), id, fileID))
+	// Remove from disk (best-effort) using the server-side storage_id.
+	if filePath := lib.StorageFilePath(id, storageID); filePath != "" {
+		os.Remove(filePath)
+	}
 
 	_, err = tx.ExecContext(r.Context(),
 		`UPDATE users SET storage_used_bytes = MAX(0, storage_used_bytes - ?) WHERE uid = ?`, fileSize, uid,
@@ -490,11 +530,11 @@ func ServeFileHandler(w http.ResponseWriter, r *http.Request) {
 	drawingID := r.PathValue("drawingId")
 	fileID := r.PathValue("fileId")
 
-	// Verify the file exists and get its mime type.
-	var mimeType string
+	// Verify the file exists and get its server-side storage_id and mime type.
+	var mimeType, storageID string
 	err := lib.DB.QueryRowContext(r.Context(),
-		`SELECT mime_type FROM drawing_files WHERE drawing_id = ? AND id = ?`, drawingID, fileID,
-	).Scan(&mimeType)
+		`SELECT mime_type, storage_id FROM drawing_files WHERE drawing_id = ? AND id = ?`, drawingID, fileID,
+	).Scan(&mimeType, &storageID)
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -517,13 +557,25 @@ func ServeFileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	blob, err := os.ReadFile(filepath.Join(lib.StorageRoot(), drawingID, fileID))
+	filePath := lib.StorageFilePath(drawingID, storageID)
+	if filePath == "" {
+		http.NotFound(w, r)
+		return
+	}
+
+	blob, err := os.ReadFile(filePath)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
 
-	w.Header().Set("Content-Type", mimeType)
+	// Serve with a safe MIME type. If the stored type was ever not in the
+	// allowlist, force it to application/octet-stream so it cannot execute.
+	w.Header().Set("Content-Type", lib.NormalizeFileMIME(mimeType))
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	if !lib.ValidateFileMIME(mimeType) {
+		w.Header().Set("Content-Disposition", "attachment")
+	}
 	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 	w.Write(blob)
 }

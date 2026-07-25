@@ -26,21 +26,29 @@ type Room struct {
 	createdAt    time.Time
 	msgCount     int64
 	lastElements []json.RawMessage
+	loadOnce     sync.Once
+}
+
+func roomDrawingID(key string) string {
+	if len(key) > 5 && key[:5] == "draw:" {
+		return key[5:]
+	}
+	return ""
 }
 
 func newRoom(key string) *Room {
-	drawingID := ""
-	if len(key) > 5 && key[:5] == "draw:" {
-		drawingID = key[5:]
-	}
-	r := &Room{
+	return &Room{
 		clients:   make(map[*Client]bool),
 		key:       key,
-		drawingID: drawingID,
+		drawingID: roomDrawingID(key),
 		createdAt: time.Now(),
 	}
-	r.loadFromDB()
-	return r
+}
+
+func (r *Room) ensureLoaded() {
+	r.loadOnce.Do(func() {
+		r.loadFromDB()
+	})
 }
 
 func (r *Room) loadFromDB() {
@@ -62,7 +70,9 @@ func (r *Room) loadFromDB() {
 		return
 	}
 	if parsed.Elements != nil {
+		r.mu.Lock()
 		r.lastElements = parsed.Elements
+		r.mu.Unlock()
 	}
 }
 
@@ -249,12 +259,17 @@ var hub = struct {
 
 func getOrCreateRoom(key string) *Room {
 	hub.mu.Lock()
-	defer hub.mu.Unlock()
 	if r, ok := hub.rooms[key]; ok {
+		hub.mu.Unlock()
+		r.ensureLoaded()
 		return r
 	}
 	r := newRoom(key)
 	hub.rooms[key] = r
+	hub.mu.Unlock()
+	// Load from DB outside the hub lock so a slow query cannot block joins
+	// for other rooms.
+	r.ensureLoaded()
 	return r
 }
 

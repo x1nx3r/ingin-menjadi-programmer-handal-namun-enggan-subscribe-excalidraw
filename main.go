@@ -58,7 +58,7 @@ func main() {
 
 	// Auth
 	mux.Handle("POST /auth/login", middleware.RateLimitAuth(auth.LoginHandler))
-	mux.HandleFunc("POST /auth/logout", auth.LogoutHandler)
+	mux.Handle("POST /auth/logout", middleware.RateLimitAuth(auth.LogoutHandler))
 	mux.HandleFunc("GET /auth/user", auth.UserHandler)
 
 	// Pages
@@ -79,17 +79,18 @@ func main() {
 	mux.Handle("DELETE /api/draw/{id}/file", middleware.RequireAuth(middleware.RateLimitAPI(api.DeleteFileHandler)))
 	mux.Handle("DELETE /api/draw/{id}", middleware.RequireAuth(middleware.RateLimitAPI(api.DeleteHandler)))
 
-	mux.HandleFunc("GET /shared/{slug}", canvas.SharedPageHandler)
-	mux.HandleFunc("GET /api/shared/{slug}/data", api.SharedDataHandler)
+	// Public share endpoints are rate-limited to discourage brute-force slug scanning.
+	mux.Handle("GET /shared/{slug}", middleware.RateLimitAPI(canvas.SharedPageHandler))
+	mux.Handle("GET /api/shared/{slug}/data", middleware.RateLimitAPI(api.SharedDataHandler))
 
 	// File serving — accessible by owner OR any shared drawing viewer.
-	mux.HandleFunc("GET /api/file/{drawingId}/{fileId}", api.ServeFileHandler)
+	mux.Handle("GET /api/file/{drawingId}/{fileId}", middleware.RateLimitAPI(api.ServeFileHandler))
 
-	// WebSocket routes
-	mux.Handle("GET /api/draw/{id}/ws", middleware.RequireAuth(api.OwnerWSHandler))
-	mux.Handle("GET /api/draw/{id}/collab-status", middleware.RequireAuth(api.CollabStatusHandler))
-	mux.Handle("GET /api/draw/{id}/collab-events", middleware.RequireAuth(api.CollabEventsHandler))
-	mux.HandleFunc("GET /api/shared/{slug}/ws", api.GuestWSHandler)
+	// WebSocket routes are rate-limited per-IP to prevent connection exhaustion.
+	mux.Handle("GET /api/draw/{id}/ws", middleware.RequireAuth(middleware.RateLimitWS(api.OwnerWSHandler)))
+	mux.Handle("GET /api/draw/{id}/collab-status", middleware.RequireAuth(middleware.RateLimitWS(api.CollabStatusHandler)))
+	mux.Handle("GET /api/draw/{id}/collab-events", middleware.RequireAuth(middleware.RateLimitWS(api.CollabEventsHandler)))
+	mux.Handle("GET /api/shared/{slug}/ws", middleware.RateLimitWS(api.GuestWSHandler))
 	mux.Handle("GET /api/ws/stats", middleware.RequireSuperAdmin(http.HandlerFunc(api.WsStatsHandler)))
 
 	// SEO: robots.txt
@@ -121,6 +122,10 @@ func main() {
 	adminMux.HandleFunc("DELETE /admin/vip/remove", admin.RemoveHandler)
 	adminMux.HandleFunc("POST /admin/users/storage-unlimited-toggle", admin.PageHandler)
 	mux.Handle("/admin/", middleware.RequireSuperAdmin(adminMux))
+
+	if os.Getenv("SUPER_ADMIN_EMAIL") == "" {
+		log.Fatal("SUPER_ADMIN_EMAIL environment variable is required")
+	}
 
 	// Middleware
 	wrapped := middleware.Middleware(mux)

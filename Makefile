@@ -53,19 +53,14 @@ templ:
 	@which templ > /dev/null || (echo "Installing templ..." && go install github.com/a-h/templ/cmd/templ@latest)
 	@$(TEMPL_BIN) generate
 
-## css: Compile Tailwind CSS (scans root source templ files)
-css: generate-css
-	@which $(TAILWIND_BIN) > /dev/null && $(TAILWIND_BIN) -i app/_entry.css -o app/assets/globals.css.output --minify || npx @tailwindcss/cli -i app/_entry.css -o app/assets/globals.css.output --minify
-
-## generate-css: Extract responsive classes from .templ files
-generate-css:
-	@go run tools/generate_css/main.go
+## css: Compile Tailwind CSS (scans generated *_templ.go files)
+css:
+	@which $(TAILWIND_BIN) > /dev/null && $(TAILWIND_BIN) -i app/globals.css -o app/assets/globals.css.output --minify || npx @tailwindcss/cli -i app/globals.css -o app/assets/globals.css.output --minify
 
 ## dev: Run live-reloading dev server
 dev: $(TAILWIND_BIN) bundle
-	@$(MAKE) generate-css
 	@$(MAKE) css
-	@bash -c 'trap "kill 0" EXIT; $(TAILWIND_BIN) -i app/_entry.css -o app/assets/globals.css.output --watch & air; wait'
+	@bash -c 'trap "kill 0" EXIT; $(TAILWIND_BIN) -i app/globals.css -o app/assets/globals.css.output --watch & air; wait'
 
 ## bundle: Bundle Excalidraw with esbuild
 bundle: app/assets/excalidraw/node_modules

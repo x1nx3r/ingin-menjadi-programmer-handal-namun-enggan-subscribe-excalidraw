@@ -1,13 +1,65 @@
 package lib
 
 import (
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"log"
 	"path/filepath"
+	"strings"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 )
+
+// Allowed file MIME types for drawing attachments.
+// Any other type is stored/rewritten as application/octet-stream.
+var allowedFileTypes = map[string]struct{}{
+	"image/png":     {},
+	"image/jpeg":    {},
+	"image/jpg":     {},
+	"image/webp":    {},
+	"image/gif":     {},
+	"image/svg+xml": {},
+	"image/avif":    {},
+}
+
+// ValidateFileMIME reports whether mime is an allowed file type.
+func ValidateFileMIME(mime string) bool {
+	_, ok := allowedFileTypes[strings.ToLower(strings.TrimSpace(mime))]
+	return ok
+}
+
+// NormalizeFileMIME returns a safe MIME type for the given header value.
+// If the type is not in the allowlist, it returns application/octet-stream.
+func NormalizeFileMIME(mime string) string {
+	if ValidateFileMIME(mime) {
+		return strings.ToLower(strings.TrimSpace(mime))
+	}
+	return "application/octet-stream"
+}
+
+// GenerateStorageID creates a deterministic, filesystem-safe identifier
+// for a drawing file. The client-supplied fileId is never used as a filename.
+func GenerateStorageID(drawingID, fileID string) string {
+	h := sha256.New()
+	h.Write([]byte(drawingID))
+	h.Write([]byte{0})
+	h.Write([]byte(fileID))
+	return hex.EncodeToString(h.Sum(nil))[:32]
+}
+
+// StorageFilePath returns a safe on-disk path for a file blob.
+// Both drawingID and storageID must be base filenames (no path separators).
+func StorageFilePath(drawingID, storageID string) string {
+	if drawingID != filepath.Base(drawingID) || drawingID == "" || drawingID == "." || drawingID == ".." {
+		return ""
+	}
+	if storageID != filepath.Base(storageID) || storageID == "" || storageID == "." || storageID == ".." {
+		return ""
+	}
+	return filepath.Join(storageRoot, drawingID, storageID)
+}
 
 var (
 	DB          *sql.DB
@@ -31,8 +83,9 @@ func StopWAL() {
 }
 
 // FilePath returns the on-disk path for a drawing's file blob.
-func FilePath(drawingID, fileID string) string {
-	return filepath.Join(storageRoot, drawingID, fileID)
+// It uses the server-side storageID, never the client-supplied fileId.
+func FilePath(drawingID, storageID string) string {
+	return StorageFilePath(drawingID, storageID)
 }
 
 func InitDB(path string) {
@@ -154,17 +207,45 @@ func migrate() {
 	// File storage: table for blobs attached to drawings.
 	if _, err := DB.Exec(`
 		CREATE TABLE IF NOT EXISTS drawing_files (
-			id         TEXT NOT NULL,
-			drawing_id TEXT NOT NULL REFERENCES drawings(id) ON DELETE CASCADE,
-			owner_id   TEXT NOT NULL,
-			mime_type  TEXT NOT NULL,
-			file_size  INTEGER NOT NULL,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			id          TEXT NOT NULL,
+			drawing_id  TEXT NOT NULL REFERENCES drawings(id) ON DELETE CASCADE,
+			owner_id    TEXT NOT NULL,
+			storage_id  TEXT NOT NULL,
+			mime_type   TEXT NOT NULL,
+			file_size   INTEGER NOT NULL,
+			created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
 			PRIMARY KEY (drawing_id, id)
 		);
 	`); err != nil {
 		log.Fatalf("migrate drawing_files: %v", err)
 	}
+
+	// Idempotent: add storage_id column for safe on-disk filenames.
+	_ = DB.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('drawing_files') WHERE name='storage_id'`).Scan(&colCount)
+	if colCount == 0 {
+		if _, err = DB.Exec(`ALTER TABLE drawing_files ADD COLUMN storage_id TEXT NOT NULL DEFAULT ''`); err != nil {
+			log.Fatalf("migrate drawing_files.storage_id: %v", err)
+		}
+	}
+
+	// One-time migration: generate deterministic storage_ids for legacy rows.
+	// This is safe because drawing_id is server-generated and id is client-supplied
+	// but was previously used as the filename. We migrate to a hash-based safe id.
+	rows, err := DB.Query(`SELECT drawing_id, id FROM drawing_files WHERE storage_id = '' OR storage_id IS NULL`)
+	if err != nil {
+		log.Fatalf("migrate drawing_files.storage_id query: %v", err)
+	}
+	for rows.Next() {
+		var drawingID, fileID string
+		if err := rows.Scan(&drawingID, &fileID); err != nil {
+			continue
+		}
+		storageID := GenerateStorageID(drawingID, fileID)
+		if _, err := DB.Exec(`UPDATE drawing_files SET storage_id = ? WHERE drawing_id = ? AND id = ?`, storageID, drawingID, fileID); err != nil {
+			log.Printf("migrate storage_id for %s/%s: %v", drawingID, fileID, err)
+		}
+	}
+	rows.Close()
 
 	// Per-user storage quota columns.
 	_ = DB.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('users') WHERE name='storage_max_bytes'`).Scan(&colCount)

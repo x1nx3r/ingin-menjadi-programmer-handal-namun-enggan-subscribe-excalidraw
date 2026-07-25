@@ -45,12 +45,7 @@ func Middleware(next http.Handler) http.Handler {
 		token, err := lib.FirebaseAuth.VerifySessionCookie(context.Background(), cookie.Value)
 		if err != nil {
 			log.Printf("session cookie invalid: %v", err)
-			http.SetCookie(w, &http.Cookie{
-				Name:   "session",
-				Value:  "",
-				Path:   "/",
-				MaxAge: -1,
-			})
+			clearSessionCookie(w, r)
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -85,12 +80,28 @@ func Middleware(next http.Handler) http.Handler {
 
 // --- Auth guards ---
 
-var superAdminEmail = func() string {
-	if e := os.Getenv("SUPER_ADMIN_EMAIL"); e != "" {
-		return e
+func superAdminEmail() string {
+	return os.Getenv("SUPER_ADMIN_EMAIL")
+}
+
+func isHTTPS(r *http.Request) bool {
+	if r.TLS != nil {
+		return true
 	}
-	return "monmega110@gmail.com"
-}()
+	return r.Header.Get("X-Forwarded-Proto") == "https"
+}
+
+func clearSessionCookie(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   isHTTPS(r),
+		SameSite: http.SameSiteStrictMode,
+	})
+}
 
 // RequireAuth rejects unauthenticated requests with a 401 + HX-Redirect so
 // HTMX on the client handles the redirect without a hard navigation.
@@ -109,7 +120,8 @@ func RequireAuth(next http.HandlerFunc) http.HandlerFunc {
 // 404 (not 403) deliberately hides the existence of the route.
 func RequireSuperAdmin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if GetUserEmail(r.Context()) != superAdminEmail {
+		admin := superAdminEmail()
+		if admin == "" || GetUserEmail(r.Context()) != admin {
 			http.NotFound(w, r)
 			return
 		}
@@ -209,12 +221,18 @@ func init() {
 		for range cleanupTicker.C {
 			authLimiter.mu.Lock()
 			authLimiter.clients = make(map[string]*bucket)
+			authLimiter.hits = 0
+			authLimiter.blocked = make(map[string]int64)
 			authLimiter.mu.Unlock()
 			wsLimiter.mu.Lock()
 			wsLimiter.clients = make(map[string]*bucket)
+			wsLimiter.hits = 0
+			wsLimiter.blocked = make(map[string]int64)
 			wsLimiter.mu.Unlock()
 			apiLimiter.mu.Lock()
 			apiLimiter.clients = make(map[string]*bucket)
+			apiLimiter.hits = 0
+			apiLimiter.blocked = make(map[string]int64)
 			apiLimiter.mu.Unlock()
 		}
 	}()
