@@ -3,19 +3,12 @@
 # IMPHISE — Excalidraw wrapper. Single binary, SQLite, WebSockets, no runtime.
 #
 # Build:  docker build -t gotth . --provenance=false
-# Run:    docker run -p 3000:3000 \
-#           -e SUPER_ADMIN_EMAIL=you@example.com \
-#           -v gotth-data:/data \
-#           -v /path/to/creds.json:/app/service-account.json:ro \
-#           gotth
 #
-# Required:
-#   SUPER_ADMIN_EMAIL          env var. No default.
-#   Firebase service account   mount into /app (auto-discovered) or set
-#                              FIREBASE_CREDENTIALS=/path/to/file.json.
-# Optional:
-#   PORT            (default 3000)
-#   SQLITE_DB_PATH  (default /data/canvas.db)
+# Cache architecture:
+#   • Toolchain (apk/templ/tailwind) → never changes unless ARGs change
+#   • go mod download                 → only when go.mod/go.sum change
+#   • CSS pipeline (templ+tailwind)   → only when .templ or globals.css change
+#   • Go build (with build cache)     → incremental after any source change
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ─── Stage 1: Excalidraw bundle + fonts ──────────────────────────────────────
@@ -23,7 +16,7 @@ FROM node:22-bookworm-slim AS assets
 WORKDIR /build
 
 COPY app/assets/excalidraw/package.json app/assets/excalidraw/package-lock.json ./
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm npm ci
 
 COPY app/assets/excalidraw/entry.js ./
 RUN mkdir -p /out \
@@ -33,45 +26,60 @@ RUN mkdir -p /out \
        --define:process.env.NODE_ENV='"production"' \
     && cp -r node_modules/@excalidraw/excalidraw/dist/prod/fonts /out/fonts
 
-# ─── Stage 2: templ + Tailwind + CGO build (Alpine / musl) ──────────────────
-# Alpine so the binary links against musl — enables a ~7 MB runtime image.
+# ─── Stage 2: Build (Alpine / musl) ─────────────────────────────────────────
 FROM golang:1.25-alpine AS build
 
 ARG TEMPL_VERSION=v0.3.1020
 ARG TAILWIND_VERSION=4.3.2
 
-# gcc + musl-dev for sqlite3 CGO. nodejs + npm because Tailwind's standalone
-# binary is glibc-only, but its npm package CLI runs anywhere Node does.
-# binutils gives us 'strip' to shave CGO debug symbols that -s -w misses.
+# ── Toolchain (effectively permanent cache hits) ─────────────────────────
 RUN apk add --no-cache gcc musl-dev nodejs npm binutils
-
 RUN go install github.com/a-h/templ/cmd/templ@${TEMPL_VERSION}
 
-# Tailwind v4 CLI is a separate npm package; the core 'tailwindcss' package
-# is needed for @import resolution in globals.css.
+# Both packages needed: @tailwindcss/cli for the 'tailwindcss' command,
+# tailwindcss (core) for @import resolution in globals.css.
 RUN npm install -g tailwindcss@${TAILWIND_VERSION} @tailwindcss/cli@${TAILWIND_VERSION}
 
 WORKDIR /src
+
+# ── Module cache (invalidates only on go.mod/go.sum) ─────────────────────
 COPY go.mod go.sum ./
 RUN go mod download
 
+# ── CSS pipeline (invalidates only on .templ or globals.css changes) ─────
+# Files are copied with exact globs so a Go-handler-only change skips this
+# entire layer. The generated *_templ.go and globals.css.output survive the
+# later COPY . . because they are git-ignored (absent from build context).
+COPY app/globals.css              app/globals.css
+COPY app/*.templ                  app/
+COPY app/admin/*.templ            app/admin/
+COPY app/canvas/*.templ           app/canvas/
+COPY app/components/*.templ       app/components/
+COPY app/dashboard/*.templ        app/dashboard/
+COPY app/profile/*.templ          app/profile/
+
+RUN mkdir -p node_modules \
+    && ln -sf /usr/local/lib/node_modules/tailwindcss node_modules/tailwindcss \
+    && find app -name '*_templ.go' -delete \
+    && templ generate \
+    && tailwindcss -i app/globals.css -o app/assets/globals.css.output --minify
+
+# ── Full source + Go build (re-runs on any file change; cache mount makes
+#    incremental compiles ~10 s instead of ~90 s) ─────────────────────────
 COPY . .
 COPY --from=assets /out/excalidraw.bundle.js app/assets/public/excalidraw.bundle.js
 COPY --from=assets /out/fonts app/assets/public/fonts
 
-RUN templ generate \
-    && npm install --no-save tailwindcss@${TAILWIND_VERSION} \
-    && tailwindcss -i app/globals.css -o app/assets/globals.css.output --minify \
-    && go test ./... \
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    go test ./... \
     && CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /out/server .
 
-# Strip C/C++ symbols that Go's -s doesn't touch (sqlite3 binding, etc).
+# Strip C/C++ symbols that Go's -s doesn't touch (sqlite3 binding).
 RUN strip -s /out/server
 
 # ─── Stage 3: Runtime ───────────────────────────────────────────────────────
 FROM alpine:3.21
 
-# ca-certificates for Firebase HTTPS. curl for the healthcheck.
 RUN apk add --no-cache ca-certificates curl \
     && adduser -D -u 10001 app
 

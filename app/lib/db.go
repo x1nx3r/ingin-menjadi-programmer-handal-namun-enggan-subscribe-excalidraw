@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"log"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -90,6 +91,14 @@ func FilePath(drawingID, storageID string) string {
 
 func InitDB(path string) {
 	dbPath = path
+
+	// Ensure the parent directory exists. In containers the volume mount
+	// may shadow the image's directory with different ownership.
+	if dir := filepath.Dir(path); dir != "." {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			log.Fatalf("create db directory %s: %v", dir, err)
+		}
+	}
 
 	// Derive storage root from DB path: replace the filename with "files/".
 	// ./canvas.db  ->  ./files/
