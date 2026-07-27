@@ -92,11 +92,17 @@ func FilePath(drawingID, storageID string) string {
 func InitDB(path string) {
 	dbPath = path
 
-	// Ensure the parent directory exists. In containers the volume mount
-	// may shadow the image's directory with different ownership.
+	// Ensure the parent directory exists and is writable. In containers the
+	// volume mount may shadow the image's directory with different ownership.
 	if dir := filepath.Dir(path); dir != "." {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			log.Fatalf("create db directory %s: %v", dir, err)
+		}
+		if f, err := os.CreateTemp(dir, ".write-test-*"); err != nil {
+			log.Fatalf("cannot write to %s (check volume permissions): %v", dir, err)
+		} else {
+			f.Close()
+			os.Remove(f.Name())
 		}
 	}
 
