@@ -1,0 +1,37 @@
+# VCS
+.git/
+
+# Secrets — never bake these into an image. Mount at runtime instead.
+.env
+*-firebase-adminsdk-*.json
+service-account.json
+
+# Local runtime state — your dev database does not belong in production
+canvas.db
+canvas.db-shm
+canvas.db-wal
+
+# Build artifacts (regenerated inside the image)
+bin/
+tmp/
+*_templ.go
+app/assets/globals.css.output
+app/_entry.css
+app/_responsive.css
+app/_source.html
+
+# Node (reinstalled via npm ci in the assets stage)
+**/node_modules/
+
+# Stale esbuild leftovers — nothing references them
+app/assets/public/*.woff2
+app/assets/public/excalidraw.bundle.css
+
+# Load-testing gear
+k6
+load_tests/
+
+# Misc local clutter
+profiles*/
+cookie.txt
+a-next-lie/
